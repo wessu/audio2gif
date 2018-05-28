@@ -131,10 +131,10 @@ def save_img_results(data_img, fake, epoch, image_dir):
         if len(data_img[0].shape) > 3:
             # save gifs
             for img in data_img:
-                img = Image.fromarray(img.numpy())
+                img = Image.fromarray(img.numpy().astype(np.uint8))
                 img.save(os.path.join('%s/real_samples.gif' % image_dir, 'GIF'))
             for img in fake.data:
-                img = Image.fromarray(img.numpy())
+                img = Image.fromarray(img.numpy().astype(np.uint8))
                 img.save(os.path.join('%s/fake_samples_epoch_%03d.png' %
                 (image_dir, epoch), 'GIF'))
         else:
