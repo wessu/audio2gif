@@ -9,6 +9,7 @@ from torch.nn import init
 import torch
 import torch.nn as nn
 import torchvision.utils as vutils
+from PIL import Image
 
 
 #############################
@@ -36,10 +37,11 @@ def compute_discriminator_loss(netD, real_imgs, fake_imgs,
     # real pairs
     inputs = (real_features, cond)
     if cfg.CPU:
-        real_logits = netD.get_cond_logits(*inputs)
+        real_logits = netD.get_cond_logits(*inputs) # spacil repetition of logits
     else:
         real_logits = nn.parallel.data_parallel(netD.get_cond_logits, inputs, gpus)
     errD_real = criterion(real_logits, real_labels)
+
     # wrong pairs
     inputs = (real_features[:(batch_size-1)], cond[1:])
     if cfg.CPU:
@@ -126,13 +128,23 @@ def save_img_results(data_img, fake, epoch, image_dir):
     # data_img is changed to [0,1]
     if data_img is not None:
         data_img = data_img[0:num]
-        vutils.save_image(
-            data_img, '%s/real_samples.png' % image_dir,
-            normalize=True)
-        # fake.data is still [-1, 1]
-        vutils.save_image(
-            fake.data, '%s/fake_samples_epoch_%03d.png' %
-            (image_dir, epoch), normalize=True)
+        if len(data_img[0].shape) > 3:
+            # save gifs
+            for img in data_img:
+                img = Image.fromarray(img.numpy().astype(np.uint8))
+                img.save(os.path.join('%s/real_samples.gif' % image_dir, 'GIF'))
+            for img in fake.data:
+                img = Image.fromarray(img.numpy().astype(np.uint8))
+                img.save(os.path.join('%s/fake_samples_epoch_%03d.png' %
+                (image_dir, epoch), 'GIF'))
+        else:
+            vutils.save_image(
+                data_img, '%s/real_samples.png' % image_dir,
+                normalize=True)
+            # fake.data is still [-1, 1]
+            vutils.save_image(
+                fake.data, '%s/fake_samples_epoch_%03d.png' %
+                (image_dir, epoch), normalize=True)
     else:
         vutils.save_image(
             fake.data, '%s/lr_fake_samples_epoch_%03d.png' %

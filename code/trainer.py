@@ -54,10 +54,8 @@ class GANTrainer(object):
         from model import STAGE1_G, STAGE1_D
         netG = STAGE1_G()
         netG.apply(weights_init)
-        print(netG)
         netD = STAGE1_D()
         netD.apply(weights_init)
-        print(netD)
 
         if cfg.NET_G != '':
             state_dict = \
@@ -76,12 +74,50 @@ class GANTrainer(object):
             netD.cuda()
         return netG, netD
 
+    # ############# For training stageII GAN  #############
+    def load_network_stageII(self):
+        from model import STAGE1_G, STAGE2_G_twostream, STAGE2_D
+
+        Stage1_G = STAGE1_G()
+        netG = STAGE2_G_twostream(Stage1_G)
+        netG.apply(weights_init)
+        print(netG)
+        if cfg.NET_G != '':
+            state_dict = \
+                torch.load(cfg.NET_G,
+                           map_location=lambda storage, loc: storage)
+            netG.load_state_dict(state_dict)
+            print('Load from: ', cfg.NET_G)
+        elif cfg.STAGE1_G != '':
+            state_dict = \
+                torch.load(cfg.STAGE1_G,
+                           map_location=lambda storage, loc: storage)
+            netG.STAGE1_G.load_state_dict(state_dict)
+            print('Load from: ', cfg.STAGE1_G)
+        else:
+            print("Please give the Stage1_G path")
+            return
+
+        netD = STAGE2_D()
+        netD.apply(weights_init)
+        if cfg.NET_D != '':
+            state_dict = \
+                torch.load(cfg.NET_D,
+                           map_location=lambda storage, loc: storage)
+            netD.load_state_dict(state_dict)
+            print('Load from: ', cfg.NET_D)
+        print(netD)
+
+        if cfg.CUDA:
+            netG.cuda()
+            netD.cuda()
+        return netG, netD
 
     def train(self, data_loader, stage=1):
-        #if stage == 1:
-        netG, netD = self.load_network_stageI()
-        #else:
-        #    netG, netD = self.load_network_stageII()
+        if stage == 1:
+            netG, netD = self.load_network_stageI()
+        else:
+            netG, netD = self.load_network_stageII()
 
         nz = cfg.Z_DIM
         batch_size = self.batch_size
@@ -111,6 +147,7 @@ class GANTrainer(object):
         count = 0
         for epoch in range(self.max_epoch):
             start_t = time.time()
+            print("running epoch {}".format(epoch))
             if epoch % lr_decay_step == 0 and epoch > 0:
                 generator_lr *= 0.5
                 for param_group in optimizerG.param_groups:
@@ -124,7 +161,9 @@ class GANTrainer(object):
                 # (1) Prepare training data
                 ######################################################
                 real_img_cpu, txt_embedding = data
+                real_img_cpu = real_img_cpu.type(torch.FloatTensor)
                 real_imgs = Variable(real_img_cpu)
+                txt_embedding = txt_embedding.type(torch.FloatTensor)
                 txt_embedding = Variable(txt_embedding)
                 if cfg.CUDA:
                     real_imgs = real_imgs.cuda()

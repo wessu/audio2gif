@@ -1,19 +1,20 @@
 CONFIG_NAME: 'stageI'
 
-DATASET_NAME: 'coco'
-EMBEDDING_TYPE: 'cnn-rnn'
+DATASET_NAME: 'gif'
+# EMBEDDING_TYPE: 'cnn-rnn'
 # GPU_ID: '0,1'
 CUDA: False
 CPU: True
 Z_DIM: 100
 DATA_DIR: '../data/coco'
-IMSIZE: 64
+IMSIZE: 256 # resize to (not crop)
 WORKERS: 1
-STAGE: 1
+STAGE: 2
+STAGE1_G: '../output/gif_stageI_2018_05_24_15_46_50/Model/netG_epoch_25.pth'
 TRAIN:
     FLAG: True
-    BATCH_SIZE: 10
-    MAX_EPOCH: 10
+    BATCH_SIZE: 2
+    MAX_EPOCH: 25
     LR_DECAY_EPOCH: 20
     SNAPSHOT_INTERVAL: 10
     DISCRIMINATOR_LR: 0.0002
@@ -27,4 +28,4 @@ GAN:
     GF_DIM: 192
 
 TEXT:
-    DIMENSION: 1024
+    DIMENSION: 256

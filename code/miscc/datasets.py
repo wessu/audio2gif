@@ -13,9 +13,58 @@ import pickle
 import random
 import numpy as np
 import pandas as pd
-
+import tensorflow as tf
 from miscc.config import cfg
 
+
+class GIFDataset(data.Dataset):
+    def __init__(self, data_dir, embedding_size, stage=1,  imsize=64, n_frames=4):
+        self.imsize = imsize
+        self.data_dir = data_dir
+        self.filenames = [name for name in os.listdir(data_dir) if not name.startswith('.')]
+        print("creating GIF dataset")
+        print(self.filenames)
+        self.n_gif = len(self.filenames)
+        print("with {} data".format(self.n_gif))
+        self.n_frames = n_frames
+        self.noise_dim = embedding_size
+        self.stage = stage
+
+    def get_gif(self, img_name, n_frames):
+        gif_base = os.path.join(self.data_dir, img_name)
+        frames = os.listdir(gif_base)
+        if len(frames) > n_frames:
+            frames_order = np.arange(len(frames))
+            np.random.shuffle(frames_order)
+            selected_frames = frames_order[:n_frames]
+            selected_frames = sorted(selected_frames)
+        else:
+            selected_frames = np.tile(np.arange(len(frames)), self.n_frames//len(frames) + 1)[:n_frames]
+        imgs = []
+        for f in selected_frames:
+            img = Image.open(os.path.join(gif_base, "{}.jpg".format(f)))
+            if img.size[0] != self.imsize:
+                img = img.resize((self.imsize, self.imsize))
+            img = np.array(img.convert('RGB')) # size, size , 3
+            imgs.append(img)
+        print(np.array(imgs).shape)
+        # imgs = D, H, W. C -> C, D, H, W
+        return np.array(imgs).transpose((3,0,1,2))
+
+    def get_image(self, img_name):
+        return np.squeeze(self.get_gif(img_name, 1)) # return C, H, W
+
+    def get_fake_embedding(self):
+        return np.random.randn(self.noise_dim)
+
+    def __len__(self):
+        return self.n_gif
+
+    def __getitem__(self, index):
+        if self.stage == 2:
+            return self.get_gif(self.filenames[index], self.n_frames), self.get_fake_embedding()
+        else:
+            return self.get_image(self.filenames[index]), self.get_fake_embedding()
 
 class TextDataset(data.Dataset):
     def __init__(self, data_dir, split='train', embedding_type='cnn-rnn',

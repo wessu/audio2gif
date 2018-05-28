@@ -16,7 +16,7 @@ import dateutil.tz
 dir_path = (os.path.abspath(os.path.join(os.path.realpath(__file__), './.')))
 sys.path.append(dir_path)
 
-from miscc.datasets import TextDataset
+from miscc.datasets import TextDataset, GIFDataset
 from miscc.config import cfg, cfg_from_file
 from miscc.utils import mkdir_p
 from trainer import GANTrainer
@@ -61,9 +61,13 @@ if __name__ == "__main__":
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-        dataset = TextDataset(cfg.DATA_DIR, 'train',
-                              imsize=cfg.IMSIZE,
-                              transform=image_transform)
+        if cfg.DATASET_NAME == 'gif':
+            dataset = GIFDataset(cfg.DATA_DIR, cfg.TEXT.DIMENSION, imsize=cfg.IMSIZE, stage=cfg.STAGE)
+        else:
+            dataset = TextDataset(cfg.DATA_DIR, 'train',
+                                  imsize=cfg.IMSIZE,
+                                  transform=image_transform)
+        #print(dataset)
         assert dataset
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=cfg.TRAIN.BATCH_SIZE * num_gpu,
