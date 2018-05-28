@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torchvision.utils as vutils
 from PIL import Image
+import imageio
 
 
 #############################
@@ -130,13 +131,10 @@ def save_img_results(data_img, fake, epoch, image_dir):
         data_img = data_img[0:num]
         if len(data_img[0].shape) > 3:
             # save gifs
-            for img in data_img:
-                img = Image.fromarray(img.numpy().astype(np.uint8))
-                img.save(os.path.join('%s/real_samples.gif' % image_dir, 'GIF'))
-            for img in fake.data:
-                img = Image.fromarray(img.numpy().astype(np.uint8))
-                img.save(os.path.join('%s/fake_samples_epoch_%03d.png' %
-                (image_dir, epoch), 'GIF'))
+            for i, img in enumerate(data_img):
+                save_gif('%s/real_samples_%d.gif' % (image_dir, i), img.numpy())
+            for i, img in enumerate(fake.data):
+                save_gif('%s/fake_samples_%d_epoch_%03d.gif' % (image_dir, i, epoch), img.numpy())
         else:
             vutils.save_image(
                 data_img, '%s/real_samples.png' % image_dir,
@@ -150,6 +148,15 @@ def save_img_results(data_img, fake, epoch, image_dir):
             fake.data, '%s/lr_fake_samples_epoch_%03d.png' %
             (image_dir, epoch), normalize=True)
 
+def save_gif(name, frames):
+    # given frames with dim [C, T, H, W] and svae as a gif
+    frames = np.transpose(frames, (1,0, 2, 3))
+    processed = []
+    for f in frames:
+        frame = Image.fromarray(f.astype(np.uint8), mode='RGB')
+        frame.convert("P", palette=Image.WEB)
+        processed.append(np.array(frame))
+    imageio.mimsave(name, processed)
 
 def save_model(netG, netD, epoch, model_dir):
     torch.save(
