@@ -255,6 +255,8 @@ class D_GET_LOGITS(nn.Module):
             c_code = c_code.view(-1, self.ef_dim, 1, 1)
             c_code = c_code.repeat(1, 1, 4, 4)
             # state size (ngf+egf) x 4 x 4
+            print("c_code shape {}".format(c_code.shape))
+            print("h_code shape {}".format(h_code.shape))
             h_c_code = torch.cat((h_code, c_code), 1)
         else:
             h_c_code = h_code
@@ -319,7 +321,7 @@ class STAGE1_D(nn.Module):
     def define_module(self):
         ndf, nef = self.df_dim, self.ef_dim
         self.encode_img = nn.Sequential(
-            nn.Conv2d(3, ndf, 4, 2, 1, bias=False),
+            nn.Conv2d(3, ndf, 4, 2, 1, bias=False), # 3 x 64 x 64
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf) x 32 x 32
             nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
@@ -333,7 +335,7 @@ class STAGE1_D(nn.Module):
             nn.Conv2d(ndf*4, ndf * 8, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ndf * 8),
             # state size (ndf * 8) x 4 x 4)
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.LeakyReLU(0.2, inplace=True),
         )
 
         self.get_cond_logits = D_GET_LOGITS(ndf, nef)
