@@ -81,7 +81,7 @@ def extract_features(fn, label, save=True):
     except Exception as err:
         print('{} extraction failed. Error:'.format(fn), err)
 
-def extract(feat_type='melspec_demo', exclude_extracted=True):
+def extract(feat_type='melspec', exclude_extracted=True):
     global feat_dir
     feat_dir = os.path.join(data_dir, 'feature', feat_type)
     if not os.path.isdir(feat_dir):
@@ -92,8 +92,8 @@ def extract(feat_type='melspec_demo', exclude_extracted=True):
     feat_list = os.listdir(feat_dir) if exclude_extracted else [] # Pass already extracted data
     data_list = get_intersection(audio_list, video_list, feat_list)
     #===== demo purpose =====#
-    np.random.shuffle(data_list)
-    data_list = data_list[:100]
+    # np.random.shuffle(data_list)
+    # data_list = data_list[:100]
     #===== demo purpose =====#
 
     print('{} pairs of data. ({} audio, {} video)'.format(len(data_list), len(audio_list), len(video_list)))

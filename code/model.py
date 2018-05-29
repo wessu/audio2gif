@@ -4,6 +4,10 @@ import torch.nn.parallel
 from miscc.config import cfg
 from torch.autograd import Variable
 
+def conv3_1d(in_planes, out_planes, stride=1):
+    "3 convolution without padding"
+    return nn.Conv1d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     bias=True)
 
 def conv3x3_2d(in_planes, out_planes, stride=1):
     "3x3 convolution with padding"
@@ -37,6 +41,12 @@ def upBlock_3d(in_vol, out_vol, scale_factor=(2,2,2)):
 class Squeeze(nn.Module):
     def forward(self, x):
         return torch.squeeze(x)  # "flatten" the C * H * W values into a single vector per image
+
+# class EmbeddingNet(nn.Module):
+#     def __init__(self):
+#         super(EmbeddingNet, self).__init__()
+        
+#     def forward(self, )
 
 class CA_NET(nn.Module):
     # some code is modified from vae examples
