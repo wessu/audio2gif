@@ -25,25 +25,24 @@ lmt = 50
 # partial search
 
 def extractFrames(inGIF):
-	frames = Image.open(inGIF)
-	basename = os.path.splitext(inGIF)[0]
-	maxframes = 15
-	i = 0
-	os.mkdir(basename)
-	crop_size = 240
-        while frames and i <= maxframes:
-		# crop to 240 * 240
-		
-                half_the_width = frames.size[0] / 2
-		half_the_height = frames.size[1] / 2
-		img = frames.resize((crop_size, crop_size))
+    frames = Image.open(inGIF)
+    basename = os.path.splitext(inGIF)[0]
+    maxframes = 15
+    i = 0
+    os.mkdir(basename)
+    crop_size = 240
+    while frames and i <= maxframes:
+        # crop to 240 * 240
+        half_the_width = frames.size[0] / 2
+        half_the_height = frames.size[1] / 2
+        img = frames.resize((crop_size, crop_size))
 
-		img.save(os.path.join(basename,'{}.jpg'.format(i)), 'GIF')
-		i+= 1
-		try:
-			frames.seek(i)
-		except EOFError:
-			break
+        img.save(os.path.join(basename,'{}.jpg'.format(i)), 'GIF')
+        i+= 1
+        try:
+            frames.seek(i)
+        except EOFError:
+            break
 
 search = "dog"
 lmt = 50
@@ -59,14 +58,14 @@ if r.status_code == 200:
     #print search_suggestion_list
     count = 0
     for result in search_suggestion_list:
-    	result = result['media'][0]
-    	if 'nanogif' in result:
-    		if result['mediumgif']['dims'][0] >= min_dim and result['mediumgif']['dims'][1] >= min_dim:
-    			print "saving image"
-    			gif_url = result['mediumgif']['url']
-    			urllib.urlretrieve(gif_url, 'gifs/{}_{}.gif'.format(search, count))
-    			extractFrames('gifs/{}_{}.gif'.format(search, count))
-    			count += 1
+        result = result['media'][0]
+        if 'nanogif' in result:
+            if result['mediumgif']['dims'][0] >= min_dim and result['mediumgif']['dims'][1] >= min_dim:
+                print("saving image")
+                gif_url = result['mediumgif']['url']
+                urllib.urlretrieve(gif_url, 'gifs/{}_{}.gif'.format(search, count))
+                extractFrames('gifs/{}_{}.gif'.format(search, count))
+                count += 1
 else:
     # handle a possible error
     search_suggestion_list = []

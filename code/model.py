@@ -4,10 +4,19 @@ import torch.nn.parallel
 from miscc.config import cfg
 from torch.autograd import Variable
 
-def conv3_1d(in_planes, out_planes, stride=1):
+def conv3_1d(in_planes, out_planes, stride=1, padding=False):
     "3 convolution without padding"
     return nn.Conv1d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     bias=True)
+                     padding=(padding*1), bias=True)
+
+def conv3_1dxn(in_planes, out_planes, n_layers, stride=1, padding=False):
+    in_planes = [in_planes] + [out_planes] * (n_layers - 1)
+    seqs = [nn.Sequential(
+        conv3_1d(in_plane, out_planes, stride, padding),
+        nn.BatchNorm2d(out_planes),
+        nn.LeakyReLU(0.2, inplace=True)
+        ) for in_plane in in_planes]
+    return nn.Sequential(*seqs)
 
 def conv3x3_2d(in_planes, out_planes, stride=1):
     "3x3 convolution with padding"
@@ -42,11 +51,46 @@ class Squeeze(nn.Module):
     def forward(self, x):
         return torch.squeeze(x)  # "flatten" the C * H * W values into a single vector per image
 
-# class EmbeddingNet(nn.Module):
-#     def __init__(self):
-#         super(EmbeddingNet, self).__init__()
+class EmbeddingNet(nn.Module):
+    def __init__(self, feat_dim):
+        super(EmbeddingNet, self).__init__()
+        self.feat_dim = feat_dim
+        self.define_module()
         
-#     def forward(self, )
+    def define_module(self):
+        self.embedding_net_1 = nn.Sequential(
+            conv3_1dxn(self.feat_dim, 256, 5),
+            nn.MaxPool1d(2),
+            conv3_1dxn(256, 512, 5),
+            nn.MaxPool1d(2),
+            conv3_1d(512, 1024, stride=2, padding=True),
+            conv3_1d(1024, 1024, stride=2, padding=True),
+            nn.LSTM(1024, 1024)
+            )
+        self.embedding_net_2 = nn.Sequential(
+            Transpose(0, 2), 
+            Transpose(0, 1), 
+            nn.MaxPool1d(5),
+            Flatten(), # (N, 1024 * 5)
+            nn.Linear()
+            )
+
+    def forward(self, features):
+        output, (h, c) = self.embedding_net_1(features)
+        return embedding_net_2(output)
+
+class Flatten(nn.Module):
+    def forward(self, x):
+        N, F, T = x.size()
+        return x.view(N, -1)
+
+class Transpose(nn.Module):
+    def __init__(self):
+        self.dim0 = dim0
+        self.dim1 = dim1
+    def forward(self, x):
+        return torch.transpose(x, self.dim0, self.dim0)
+
 
 class CA_NET(nn.Module):
     # some code is modified from vae examples
