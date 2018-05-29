@@ -16,7 +16,8 @@ import dateutil.tz
 dir_path = (os.path.abspath(os.path.join(os.path.realpath(__file__), './.')))
 sys.path.append(dir_path)
 
-from miscc.datasets import TextDataset, GIFDataset
+from miscc.datasets import TextDataset, GIFDataset, AudioSet, AudioSet2
+
 from miscc.config import cfg, cfg_from_file
 from miscc.utils import mkdir_p
 from trainer import GANTrainer
@@ -63,6 +64,8 @@ if __name__ == "__main__":
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         if cfg.DATASET_NAME == 'gif':
             dataset = GIFDataset(cfg.DATA_DIR, cfg.TEXT.DIMENSION, imsize=cfg.IMSIZE, stage=cfg.STAGE)
+        elif cfg.DATASET_NAME == 'audioset':
+            dataset = AudioSet(cfg.DATA_DIR)
         else:
             dataset = TextDataset(cfg.DATA_DIR, 'train',
                                   imsize=cfg.IMSIZE,

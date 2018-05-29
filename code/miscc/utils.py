@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torchvision.utils as vutils
 from PIL import Image
-import imageio
+from array2gif import write_gif
 
 
 #############################
@@ -153,10 +153,8 @@ def save_gif(name, frames):
     frames = np.transpose(frames, (1,0, 2, 3))
     processed = []
     for f in frames:
-        frame = Image.fromarray(f.astype(np.uint8), mode='RGB')
-        frame.convert("P", palette=Image.WEB)
-        processed.append(np.array(frame))
-    imageio.mimsave(name, processed)
+        processed.append(f)
+    write_gif(processed, name, fps=5)
 
 def save_model(netG, netD, epoch, model_dir):
     torch.save(
