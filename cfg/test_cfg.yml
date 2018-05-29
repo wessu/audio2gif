@@ -6,10 +6,10 @@ DATASET_NAME: 'gif'
 CUDA: False
 CPU: True
 Z_DIM: 100
-DATA_DIR: '../data/coco'
+DATA_DIR: '../data/gifs'
 IMSIZE: 256 # resize to (not crop)
 WORKERS: 1
-STAGE: 2
+STAGE: 1
 STAGE1_G: '../output/gif_stageI_2018_05_24_15_46_50/Model/netG_epoch_25.pth'
 TRAIN:
     FLAG: True
