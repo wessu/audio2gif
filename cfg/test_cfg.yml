@@ -21,11 +21,15 @@ TRAIN:
     GENERATOR_LR: 0.0002
     COEFF:
       KL: 2.0
-
+    USE_WGAN: FALSE
 GAN:
     CONDITION_DIM: 128
     DF_DIM: 96
     GF_DIM: 192
+
+WGAN:
+    LAMBDA: 10
+    N_D : 5
 
 TEXT:
     DIMENSION: 256
