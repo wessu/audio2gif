@@ -11,6 +11,7 @@ import torch.nn as nn
 import torchvision.utils as vutils
 from PIL import Image
 from array2gif import write_gif
+from torch.autograd import Variable, grad
 
 
 #############################
@@ -21,9 +22,94 @@ def KL_loss(mu, logvar):
     return KLD
 
 
+def compute_gradient_penalty(netD, real_data, fake_data, lam, gpus):
+    #print real_data.size()
+    use_cuda = not cfg.CPU and cfg.CUDA
+    alpha = torch.rand(cfg.TRAIN.BATCH_SIZE, 1,1,1)
+    alpha = alpha.expand(real_data.size())
+    if use_cuda:
+        alpha = alpha.cuda()
+
+    interpolates = alpha * real_data + ((1 - alpha) * fake_data)
+
+    if use_cuda:
+        interpolates = interpolates.cuda()
+
+    interpolates = Variable(interpolates, requires_grad=True)
+
+    disc_interpolates = netD(interpolates)
+
+    gradients = grad(outputs=disc_interpolates, inputs=interpolates,
+                              grad_outputs=torch.ones(disc_interpolates.size()).cuda() if use_cuda else torch.ones(
+                                  disc_interpolates.size()),
+                              create_graph=True, retain_graph=True, only_inputs=True)[0]
+
+    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * lam
+    return gradient_penalty
+
+
+def compute_generator_wgan_loss(netD, fake_imgs, conditions, gpus):
+    cond = conditions.detach()
+    if cfg.CPU:
+        fake_features = netD(fake_imgs)
+    else:
+        fake_features = nn.parallel.data_parallel(netD, (fake_imgs), gpus)
+    # fake pairs
+    inputs = (fake_features, cond)
+    if cfg.CPU:
+        fake_logits = netD.get_cond_logits(*inputs)
+    else:
+        fake_logits = nn.parallel.data_parallel(netD.get_cond_logits, inputs, gpus)
+    errD_fake = -fake_logits.mean()
+    # no cond error for now
+    #if netD.get_uncond_logits is not None:
+    #    if cfg.CPU:
+    #        fake_logits = netD.get_uncond_logits(fake_features)
+    #    else:
+    #        fake_logits = \
+    #            nn.parallel.data_parallel(netD.get_uncond_logits,
+    #                                      (fake_features), gpus)
+        #uncond_errD_fake = criterion(fake_logits, real_labels)
+        #errD_fake += uncond_errD_fake.
+    return errD_fake
+
+
+
+def compute_discriminator_wgan_loss(netD, real_imgs, fake_imgs, gpus, conditions, lam):
+    batch_size = real_imgs.size(0)
+    cond = conditions.detach()
+    fake = fake_imgs.detach()
+    if cfg.CPU:
+        real_features = netD(real_imgs)
+        fake_features = netD(fake)
+    else:
+        real_features = nn.parallel.data_parallel(netD, (real_imgs), gpus)
+        fake_features = nn.parallel.data_parallel(netD, (fake), gpus)
+
+    # real pairs
+    inputs = (real_features, cond)
+    if cfg.CPU:
+        real_logits = netD.get_cond_logits(*inputs) # spatial repetition of logits
+    else:
+        real_logits = nn.parallel.data_parallel(netD.get_cond_logits, inputs, gpus)
+
+    inputs = (fake_features, cond)
+    if cfg.CPU:
+        fake_logits = netD.get_cond_logits(*inputs)
+    else:
+        fake_logits = nn.parallel.data_parallel(netD.get_cond_logits, inputs, gpus)
+
+    real_logit = real_logits.mean()
+    fake_logit = fake_logits.mean()
+    wgan_loss = (real_logit - fake_logit) + compute_gradient_penalty(netD, real_imgs, fake_imgs, lam, gpus)
+    wasserstein_d = real_logit - fake_logit
+    return wgan_loss, wasserstein_d
+
+
+
 def compute_discriminator_loss(netD, real_imgs, fake_imgs,
                                real_labels, fake_labels,
-                               conditions, gpus):
+                               conditions, gpus, use_wrong_data=True):
     criterion = nn.BCELoss()
     batch_size = real_imgs.size(0)
     cond = conditions.detach()
@@ -38,19 +124,20 @@ def compute_discriminator_loss(netD, real_imgs, fake_imgs,
     # real pairs
     inputs = (real_features, cond)
     if cfg.CPU:
-        real_logits = netD.get_cond_logits(*inputs) # spacil repetition of logits
+        real_logits = netD.get_cond_logits(*inputs) # spatial repetition of logits
     else:
         real_logits = nn.parallel.data_parallel(netD.get_cond_logits, inputs, gpus)
     errD_real = criterion(real_logits, real_labels)
 
     # wrong pairs
-    inputs = (real_features[:(batch_size-1)], cond[1:])
-    if cfg.CPU:
-        wrong_logits = netD.get_cond_logits(*inputs)
-    else:
-        wrong_logits = \
-            nn.parallel.data_parallel(netD.get_cond_logits, inputs, gpus)
-    errD_wrong = criterion(wrong_logits, fake_labels[1:])
+    if use_wrong_data:
+        inputs = (real_features[:(batch_size-1)], cond[1:])
+        if cfg.CPU:
+            wrong_logits = netD.get_cond_logits(*inputs)
+        else:
+            wrong_logits = \
+                nn.parallel.data_parallel(netD.get_cond_logits, inputs, gpus)
+        errD_wrong = criterion(wrong_logits, fake_labels[1:])
     # fake pairs
     inputs = (fake_features, cond)
     if cfg.CPU:
@@ -58,7 +145,7 @@ def compute_discriminator_loss(netD, real_imgs, fake_imgs,
     else:
         fake_logits = nn.parallel.data_parallel(netD.get_cond_logits, inputs, gpus)
     errD_fake = criterion(fake_logits, fake_labels)
-
+    errD_wrong = errD_real  # dummy value
     if netD.get_uncond_logits is not None:
         if cfg.CPU:
             real_logits = netD.get_uncond_logits(real_features)
@@ -73,12 +160,20 @@ def compute_discriminator_loss(netD, real_imgs, fake_imgs,
         uncond_errD_real = criterion(real_logits, real_labels)
         uncond_errD_fake = criterion(fake_logits, fake_labels)
         #
-        errD = ((errD_real + uncond_errD_real) / 2. +
-                (errD_fake + errD_wrong + uncond_errD_fake) / 3.)
         errD_real = (errD_real + uncond_errD_real) / 2.
         errD_fake = (errD_fake + uncond_errD_fake) / 2.
+
+        if use_wrong_data:
+            errD = ((errD_real + uncond_errD_real) / 2. +
+                    (errD_fake + errD_wrong + uncond_errD_fake) / 3.)
+        else:
+            errD = (errD_real + errD_fake) / 2.
     else:
-        errD = errD_real + (errD_fake + errD_wrong) * 0.5
+        if use_wrong_data:
+            errD = errD_real + (errD_fake + errD_wrong) * 0.5
+        else:
+            errD = (errD_real + errD_fake) / 2.
+
     return errD, errD_real.data[0], errD_wrong.data[0], errD_fake.data[0]
 
 

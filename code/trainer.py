@@ -19,7 +19,7 @@ from miscc.utils import weights_init
 from miscc.utils import save_img_results, save_model
 from miscc.utils import KL_loss
 from miscc.utils import compute_discriminator_loss, compute_generator_loss
-
+from miscc.utils import compute_discriminator_wgan_loss, compute_generator_wgan_loss
 #from tensorboard import summary
 import tensorflow as tf
 #from tensorflow.summary import FileWriter
@@ -131,6 +131,7 @@ class GANTrainer(object):
             netE = self.load_network_embedding()
 
         nz = cfg.Z_DIM
+        wgan_d_count = 0
         batch_size = self.batch_size
         noise = Variable(torch.FloatTensor(batch_size, nz))
         fixed_noise = \
@@ -199,24 +200,44 @@ class GANTrainer(object):
                 # (3) Update D network
                 ###########################
                 netD.zero_grad()
-                errD, errD_real, errD_wrong, errD_fake = \
-                    compute_discriminator_loss(netD, real_imgs, fake_imgs,
-                                               real_labels, fake_labels,
-                                               mu, self.gpus)
-                errD.backward()
+                if cfg.TRAIN.USE_WGAN:
+                    wgan_d_count += 1
+                    print("wgan updating D")
+
+
+                    errD, wasserstein_d = compute_discriminator_wgan_loss(netD, real_imgs, fake_imgs, self.gpus, mu, cfg.WGAN.LAMBDA)
+                    errD.backward()
+                    skip_generator_update = (wgan_d_count % cfg.WGAN.N_D != 0)
+                else:
+                    errD, errD_real, errD_wrong, errD_fake = \
+                        compute_discriminator_loss(netD, real_imgs, fake_imgs,
+                                                   real_labels, fake_labels,
+                                                   mu, self.gpus, use_wrong_data=cfg.TRAIN.USE_WRONG_DATA)
+                    errD.backward()
+                    skip_generator_update = False
                 optimizerD.step()
                 ############################
                 # (2) Update G network
                 ###########################
-                netG.zero_grad()
-                errG = compute_generator_loss(netD, fake_imgs,
-                                              real_labels, mu, self.gpus)
-                kl_loss = KL_loss(mu, logvar)
-                errG_total = errG + kl_loss * cfg.TRAIN.COEFF.KL
-                errG_total.backward()
-                optimizerG.step()
-
+                if not skip_generator_update:
+                    netG.zero_grad()
+                    if cfg.TRAIN.USE_WGAN:
+                        print("wgan updating G")
+                        errG = compute_generator_wgan_loss(netD, fake_imgs,
+                                                            mu, self.gpus)
+                        errG.backward()
+                    else:
+                        errG = compute_generator_loss(netD, fake_imgs,
+                                                      real_labels, mu, self.gpus)
+                        kl_loss = KL_loss(mu, logvar)
+                        errG_total = errG + kl_loss * cfg.TRAIN.COEFF.KL
+                        errG_total.backward()
+                    optimizerG.step()
                 count = count + 1
+                ###########################
+                # output progress
+                ###########################
+
                 if i % 100 == 0:
                     # summary_D = tf.summary.scalar('D_loss', errD.data[0])
                     # summary_D_r = tf.summary.scalar('D_loss_real', errD_real)
@@ -243,13 +264,22 @@ class GANTrainer(object):
                     if lr_fake is not None:
                         save_img_results(None, lr_fake, epoch, self.image_dir)
             end_t = time.time()
-            print('''[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f Loss_KL: %.4f
-                     Loss_real: %.4f Loss_wrong:%.4f Loss_fake %.4f
-                     Total Time: %.2fsec
-                  '''
-                  % (epoch, self.max_epoch, i, len(data_loader),
-                     errD.data[0], errG.data[0], kl_loss.data[0],
-                     errD_real, errD_wrong, errD_fake, (end_t - start_t)))
+            if cfg.TRAIN.USE_WGAN:
+                print('''[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f
+                         wassterain_loss: %.4f
+                         Total Time: %.2fsec
+                      '''
+                      % (epoch, self.max_epoch, i, len(data_loader),
+                         errD, errG,
+                         wasserstein_d, (end_t - start_t)))
+            else:
+                print('''[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f Loss_KL: %.4f
+                         Loss_real: %.4f Loss_wrong:%.4f Loss_fake %.4f
+                         Total Time: %.2fsec
+                      '''
+                      % (epoch, self.max_epoch, i, len(data_loader),
+                         errD.data[0], errG.data[0], kl_loss.data[0],
+                         errD_real, errD_wrong, errD_fake, (end_t - start_t)))
             if epoch % self.snapshot_interval == 0:
                 save_model(netG, netD, epoch, self.model_dir)
         #
