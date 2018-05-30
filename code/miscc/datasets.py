@@ -27,10 +27,7 @@ class GIFDataset(data.Dataset):
         self.imsize = imsize
         self.data_dir = data_dir
         self.filenames = [name for name in os.listdir(data_dir) if not name.startswith('.')]
-        print("creating GIF dataset")
-        print(self.filenames)
         self.n_gif = len(self.filenames)
-        print("with {} data".format(self.n_gif))
         self.n_frames = n_frames
         self.noise_dim = embedding_size
         self.stage = stage
@@ -52,7 +49,6 @@ class GIFDataset(data.Dataset):
                 img = img.resize((self.imsize, self.imsize))
             img = np.array(img.convert('RGB')) # size, size , 3
             imgs.append(img)
-        print(np.array(imgs).shape)
         # imgs = D, H, W. C -> C, D, H, W
         return np.array(imgs).transpose((3,0,1,2))
 
