@@ -20,9 +20,9 @@ from miscc.utils import save_img_results, save_model
 from miscc.utils import KL_loss
 from miscc.utils import compute_discriminator_loss, compute_generator_loss
 
-#from tensorboard import summary
+# from tensorboard import summary
 import tensorflow as tf
-#from tensorflow.summary import FileWriter
+# from tensorflow.summary import FileWriter
 
 class GANTrainer(object):
     def __init__(self, output_dir):
@@ -217,7 +217,7 @@ class GANTrainer(object):
                 optimizerG.step()
 
                 count = count + 1
-                if i % 100 == 0:
+                if i % 50 == 0:
                     # summary_D = tf.summary.scalar('D_loss', errD.data[0])
                     # summary_D_r = tf.summary.scalar('D_loss_real', errD_real)
                     # summary_D_w = tf.summary.scalar('D_loss_wrong', errD_wrong)
@@ -233,6 +233,7 @@ class GANTrainer(object):
                     # self.summary_writer.add_summary(summary_KL, count)
 
                     # save the image result for each epoch
+                    print('iter', i)
                     inputs = (embedding, fixed_noise)
                     if cfg.CPU:
                         lr_fake, fake, _, _ = netG(*inputs)
