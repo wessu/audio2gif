@@ -142,6 +142,11 @@ class GANTrainer(object):
         if cfg.CUDA:
             noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
             real_labels, fake_labels = real_labels.cuda(), fake_labels.cuda()
+        one = torch.FloatTensor([1])
+        mone = one * -1
+        if cfg.CUDA:
+            one = one.cuda(self.gpus)
+            mone = mone.cuda(self.gpus)
 
         generator_lr = cfg.TRAIN.GENERATOR_LR
         discriminator_lr = cfg.TRAIN.DISCRIMINATOR_LR
@@ -202,9 +207,6 @@ class GANTrainer(object):
                 netD.zero_grad()
                 if cfg.TRAIN.USE_WGAN:
                     wgan_d_count += 1
-                    print("wgan updating D")
-
-
                     errD, wasserstein_d = compute_discriminator_wgan_loss(netD, real_imgs, fake_imgs, self.gpus, mu, cfg.WGAN.LAMBDA)
                     errD.backward()
                     skip_generator_update = (wgan_d_count % cfg.WGAN.N_D != 0)
@@ -222,10 +224,10 @@ class GANTrainer(object):
                 if not skip_generator_update:
                     netG.zero_grad()
                     if cfg.TRAIN.USE_WGAN:
-                        print("wgan updating G")
                         errG = compute_generator_wgan_loss(netD, fake_imgs,
                                                             mu, self.gpus)
-                        errG.backward()
+                        errG.backward(mone)
+                        errG = -errG
                     else:
                         errG = compute_generator_loss(netD, fake_imgs,
                                                       real_labels, mu, self.gpus)
