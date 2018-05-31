@@ -22,6 +22,7 @@ from miscc.utils import compute_discriminator_loss, compute_generator_loss
 from miscc.utils import compute_discriminator_wgan_loss, compute_generator_wgan_loss
 
 from torchsummary import summary
+from tensorboardX import SummaryWriter
 
 class GANTrainer(object):
     def __init__(self, output_dir):
@@ -32,7 +33,7 @@ class GANTrainer(object):
             mkdir_p(self.model_dir)
             mkdir_p(self.image_dir)
             mkdir_p(self.log_dir)
-            self.summary_writer = tf.summary.FileWriter(self.log_dir)
+            self.summary_writer = SummaryWriter(self.log_dir)
 
         self.max_epoch = cfg.TRAIN.MAX_EPOCH
         self.snapshot_interval = cfg.TRAIN.SNAPSHOT_INTERVAL
@@ -239,15 +240,11 @@ class GANTrainer(object):
                         errG_total.backward()
                     optimizerG.step()
                 count = count + 1
-<<<<<<< HEAD
-                if i % 50 == 0:
-=======
                 ###########################
                 # output progress
                 ###########################
 
                 if i % 100 == 0:
->>>>>>> Add WGAN to model. Model runs, but need to verify if it is correct
                     # summary_D = tf.summary.scalar('D_loss', errD.data[0])
                     # summary_D_r = tf.summary.scalar('D_loss_real', errD_real)
                     # summary_D_w = tf.summary.scalar('D_loss_wrong', errD_wrong)
@@ -255,13 +252,18 @@ class GANTrainer(object):
                     # summary_G = tf.summary.scalar('G_loss', errG.data[0])
                     # summary_KL = tf.summary.scalar('KL_loss', kl_loss.data[0])
                     #
-                    # self.summary_writer.add_summary(summary_D, count)
-                    # self.summary_writer.add_summary(summary_D_r, count)
-                    # self.summary_writer.add_summary(summary_D_w, count)
-                    # self.summary_writer.add_summary(summary_D_f, count)
-                    # self.summary_writer.add_summary(summary_G, count)
-                    # self.summary_writer.add_summary(summary_KL, count)
-
+                    if cfg.TRAIN.USE_WGAN:
+                        self.summary_writer.add_scalar('D_Loss', errD)
+                        #self.summary_writer.add_scalar('G_loss', errG)
+                        self.summary_writer.add_scalar('W_Loss', wasserstein_d)
+                    else:
+                        self.summary_writer.add_scaler('D_loss', errD.data[0])
+                        self.summary_writer.add_scalar('D_loss_real', errD_real)
+                        self.summary_writer.add_scalar('D_loss_real', errD_real)
+                        self.summary_writer.add_scalar('D_loss_wrong', errD_wrong)
+                        self.summary_writer.add_scalar('D_loss_fake', errD_fake)
+                        self.summary_writer.add_scalar('G_loss', errG.data[0])
+                        self.summary_writer.add_scalar('KL_loss', kl_loss.data[0])
                     # save the image result for each epoch
                     inputs = (embedding, fixed_noise)
                     if cfg.CPU:
