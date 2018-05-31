@@ -202,7 +202,7 @@ class GANTrainer(object):
                 netD.zero_grad()
                 if cfg.TRAIN.USE_WGAN:
                     wgan_d_count += 1
-                    print("wgan updating D")
+                    # print("wgan updating D")
 
 
                     errD, wasserstein_d = compute_discriminator_wgan_loss(netD, real_imgs, fake_imgs, self.gpus, mu, cfg.WGAN.LAMBDA)
@@ -222,7 +222,7 @@ class GANTrainer(object):
                 if not skip_generator_update:
                     netG.zero_grad()
                     if cfg.TRAIN.USE_WGAN:
-                        print("wgan updating G")
+                        # print("wgan updating G")
                         errG = compute_generator_wgan_loss(netD, fake_imgs,
                                                             mu, self.gpus)
                         errG.backward()

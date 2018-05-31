@@ -24,7 +24,7 @@ def KL_loss(mu, logvar):
 
 def compute_gradient_penalty(netD, real_data, fake_data, lam, gpus):
     #print real_data.size()
-    use_cuda = not cfg.CPU and cfg.CUDA
+    use_cuda = cfg.CUDA
     alpha = torch.rand(cfg.TRAIN.BATCH_SIZE, 1,1,1)
     alpha = alpha.expand(real_data.size())
     if use_cuda:

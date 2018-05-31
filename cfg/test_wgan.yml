@@ -2,8 +2,8 @@ CONFIG_NAME: 'stageI_wgan_coco'
 
 DATASET_NAME: 'coco'
 EMBEDDING_TYPE: 'cnn-rnn'
-# GPU_ID: '0,1'
-CUDA: False
+GPU_ID: '0,1'
+CUDA: True
 CPU: True
 Z_DIM: 100
 DATA_DIR: '../data/coco'
