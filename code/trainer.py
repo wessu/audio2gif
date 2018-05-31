@@ -238,26 +238,20 @@ class GANTrainer(object):
                 # output progress
                 ###########################
 
-                if i % 1 == 0:
-                    # summary_D = tf.summary.scalar('D_loss', errD.data[0])
-                    # summary_D_r = tf.summary.scalar('D_loss_real', errD_real)
-                    # summary_D_w = tf.summary.scalar('D_loss_wrong', errD_wrong)
-                    # summary_D_f = tf.summary.scalar('D_loss_fake', errD_fake)
-                    # summary_G = tf.summary.scalar('G_loss', errG.data[0])
-                    # summary_KL = tf.summary.scalar('KL_loss', kl_loss.data[0])
-                    #
+                if i % 100 == 0:
                     if cfg.TRAIN.USE_WGAN:
-                        self.summary_writer.add_scalar('D_Loss', errD)
-                        #self.summary_writer.add_scalar('G_loss', errG)
-                        self.summary_writer.add_scalar('W_Loss', wasserstein_d)
+                        self.summary_writer.add_scalar('D_Loss', errD, count)
+                        if i != 0:
+                            self.summary_writer.add_scalar('G_loss', errG, count)
+                        self.summary_writer.add_scalar('W_Loss', wasserstein_d,count)
                     else:
-                        self.summary_writer.add_scaler('D_loss', errD.data[0])
-                        self.summary_writer.add_scalar('D_loss_real', errD_real)
-                        self.summary_writer.add_scalar('D_loss_real', errD_real)
-                        self.summary_writer.add_scalar('D_loss_wrong', errD_wrong)
-                        self.summary_writer.add_scalar('D_loss_fake', errD_fake)
-                        self.summary_writer.add_scalar('G_loss', errG.data[0])
-                        self.summary_writer.add_scalar('KL_loss', kl_loss.data[0])
+                        self.summary_writer.add_scaler('D_loss', errD.data[0],count)
+                        self.summary_writer.add_scalar('D_loss_real', errD_real,count)
+                        self.summary_writer.add_scalar('D_loss_real', errD_real,count)
+                        self.summary_writer.add_scalar('D_loss_wrong', errD_wrong,count)
+                        self.summary_writer.add_scalar('D_loss_fake', errD_fake,count)
+                        self.summary_writer.add_scalar('G_loss', errG.data[0],count)
+                        self.summary_writer.add_scalar('KL_loss', kl_loss.data[0],count)
                     # save the image result for each epoch
                     inputs = (embedding, fixed_noise)
                     if cfg.CPU:
