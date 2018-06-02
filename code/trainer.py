@@ -146,8 +146,8 @@ class GANTrainer(object):
         one = torch.FloatTensor([1])
         mone = one * -1
         if cfg.CUDA:
-            one = one.cuda(self.gpus)
-            mone = mone.cuda(self.gpus)
+            one = one.cuda()
+            mone = mone.cuda()
 
         generator_lr = cfg.TRAIN.GENERATOR_LR
         discriminator_lr = cfg.TRAIN.DISCRIMINATOR_LR
