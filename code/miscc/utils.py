@@ -31,7 +31,6 @@ def compute_gradient_penalty(netD, real_data, fake_data, lam, gpus):
         alpha = alpha.cuda()
 
     interpolates = alpha * real_data + ((1 - alpha) * fake_data)
-
     if use_cuda:
         interpolates = interpolates.cuda()
 
@@ -100,7 +99,7 @@ def compute_discriminator_wgan_loss(netD, real_imgs, fake_imgs, gpus, conditions
     real_logit = real_logits.mean()
     fake_logit = fake_logits.mean()
     wgan_loss = (fake_logit - real_logit) + compute_gradient_penalty(netD, real_imgs, fake_imgs, lam, gpus)
-    wasserstein_d = fake_logit - real_logit
+    wasserstein_d = real_logit - fake_logit
     return wgan_loss, wasserstein_d
 
 
