@@ -147,6 +147,7 @@ class GANTrainer(object):
             fixed_noise_test = fixed_noise_test.cuda()
         one = torch.FloatTensor([1])
         mone = one * -1
+
         if cfg.CUDA:
             one = one.cuda(self.gpus)
             mone = mone.cuda(self.gpus)
@@ -165,6 +166,9 @@ class GANTrainer(object):
                                 lr=cfg.TRAIN.GENERATOR_LR,
                                 betas=(cfg.TRAIN.ADAM_BETA1, cfg.TRAIN.ADAM_BETA2))
         count = 0
+        # fix data to overfit
+        for data in data_loader:
+            break
         for epoch in range(self.max_epoch):
             start_t = time.time()
             print("running epoch {}".format(epoch))
@@ -175,9 +179,8 @@ class GANTrainer(object):
                 discriminator_lr *= 0.5
                 for param_group in optimizerD.param_groups:
                     param_group['lr'] = discriminator_lr
-            first_batch = None
-            for data in data_loader:
-                break
+
+
             # reuse data everytime
             for i in range(5000):
             #for i, data in enumerate(data_loader, 0):
