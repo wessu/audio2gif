@@ -150,6 +150,7 @@ class GANTrainer(object):
             fixed_noise_test = fixed_noise_test.cuda()
         one = torch.FloatTensor([1])
         mone = one * -1
+
         if cfg.CUDA:
             one = one.cuda()
             mone = mone.cuda()
@@ -159,15 +160,18 @@ class GANTrainer(object):
         lr_decay_step = cfg.TRAIN.LR_DECAY_EPOCH
         optimizerD = \
             optim.Adam(netD.parameters(),
-                       lr=cfg.TRAIN.DISCRIMINATOR_LR, betas=(0.5, 0.999))
+                       lr=cfg.TRAIN.DISCRIMINATOR_LR, betas=(cfg.TRAIN.ADAM_BETA1, cfg.TRAIN.ADAM_BETA2))
         netG_para = []
         for p in netG.parameters():
             if p.requires_grad:
                 netG_para.append(p)
         optimizerG = optim.Adam(netG_para,
                                 lr=cfg.TRAIN.GENERATOR_LR,
-                                betas=(0.5, 0.999))
+                                betas=(cfg.TRAIN.ADAM_BETA1, cfg.TRAIN.ADAM_BETA2))
         count = 0
+        # fix data to overfit
+        for data in data_loader:
+            break
         for epoch in range(self.max_epoch):
             start_t = time.time()
             print("running epoch {}".format(epoch))
@@ -178,13 +182,11 @@ class GANTrainer(object):
                 discriminator_lr *= 0.5
                 for param_group in optimizerD.param_groups:
                     param_group['lr'] = discriminator_lr
-            first_batch = None
 
-            for i, data in enumerate(data_loader, 0):
-                if first_batch == None:
-                    first_batch = data
-                else:
-                    data = first_batch # overwrite to always use the same data
+
+            # reuse data everytime
+            for i in range(500):
+            #for i, data in enumerate(data_loader, 0):
                 ######################################################
                 # (1) Prepare training data
                 ######################################################
@@ -257,14 +259,14 @@ class GANTrainer(object):
                 # output progress
                 ###########################
 
-                if i % 100 == 0:
+                if i % 50 == 0:
                     if cfg.TRAIN.USE_WGAN:
                         self.summary_writer.add_scalar('D_Loss', errD, count)
                         if i != 0:
                             self.summary_writer.add_scalar('G_loss', errG, count)
                         self.summary_writer.add_scalar('W_Loss', wasserstein_d,count)
                     else:
-                        self.summary_writer.add_scaler('D_loss', errD.data[0],count)
+                        self.summary_writer.add_scalar('D_loss', errD.data[0],count)
                         self.summary_writer.add_scalar('D_loss_real', errD_real,count)
                         self.summary_writer.add_scalar('D_loss_real', errD_real,count)
                         self.summary_writer.add_scalar('D_loss_wrong', errD_wrong,count)
@@ -272,7 +274,8 @@ class GANTrainer(object):
                         self.summary_writer.add_scalar('G_loss', errG.data[0],count)
                         self.summary_writer.add_scalar('KL_loss', kl_loss.data[0],count)
                     # save the image result for each epoch
-                    inputs = (embedding, fixed_noise)
+                    #inputs = (embedding, fixed_noise)
+                    inputs = (embedding, fixed_noise_test)
                     if cfg.CPU:
                         lr_fake, fake, _, _ = netG(*inputs)
                     else:
