@@ -134,6 +134,8 @@ class GANTrainer(object):
         wgan_d_count = 0
         batch_size = self.batch_size
         noise = Variable(torch.FloatTensor(batch_size, nz))
+        fixed_noise_test =  Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
+                     requires_grad=False)
         fixed_noise = \
             Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
                      requires_grad=False)
@@ -142,6 +144,7 @@ class GANTrainer(object):
         if cfg.CUDA:
             noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
             real_labels, fake_labels = real_labels.cuda(), fake_labels.cuda()
+            fixed_noise_test = fixed_noise_test.cuda()
         one = torch.FloatTensor([1])
         mone = one * -1
         if cfg.CUDA:
@@ -172,8 +175,13 @@ class GANTrainer(object):
                 discriminator_lr *= 0.5
                 for param_group in optimizerD.param_groups:
                     param_group['lr'] = discriminator_lr
+            first_batch = None
 
             for i, data in enumerate(data_loader, 0):
+                if first_batch == None:
+                    first_batch = data
+                else:
+                    data = first_batch # overwrite to always use the same data
                 ######################################################
                 # (1) Prepare training data
                 ######################################################
@@ -194,7 +202,8 @@ class GANTrainer(object):
                 # (2) Generate fake images
                 ######################################################
                 noise.data.normal_(0, 1)
-                inputs = (embedding, noise)
+                # inputs = (embedding, noise)
+                inputs = embedding, fixed_noise_test
                 if cfg.CPU:
                     _, fake_imgs, mu, logvar = netG(*inputs)
                 else:
