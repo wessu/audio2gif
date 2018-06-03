@@ -1,0 +1,20 @@
+CONFIG_NAME: 'embnet'
+
+DATASET_NAME: 'audioset'
+# EMBEDDING_TYPE: 'cnn-rnn'
+GPU_ID: '0,1'
+CUDA: True
+CPU: False
+DATA_DIR: '../data/audioset/train/feature/melspec'
+EVAL_DATA_DIR: '../data/audioset/eval/feature/melspec'
+# DATA_DIR: '../data/demo/feature/melspec'
+# EVAL_DATA_DIR: '../data/demo/feature/melspec'
+WORKERS: 2
+STAGE: 0
+AUDIO:
+    FEATURE_DIM: 128
+    DIMENSION: 2048
+
+TRAIN:
+    MAX_EPOCH: 100
+    BATCH_SIZE: 64
