@@ -16,11 +16,12 @@ import dateutil.tz
 dir_path = (os.path.abspath(os.path.join(os.path.realpath(__file__), './.')))
 sys.path.append(dir_path)
 
-from miscc.datasets import TextDataset, GIFDataset, AudioSet, AudioSet2
+from miscc.datasets import TextDataset, GIFDataset, AudioSet, AudioSet2, AudioSetAudio
 
 from miscc.config import cfg, cfg_from_file
 from miscc.utils import mkdir_p
-from trainer import GANTrainer
+from trainer import GANTrainer, EmbeddingNetTrainer, EmbeddingNetLSTMTrainer
+
 
 
 def parse_args():
@@ -31,6 +32,7 @@ def parse_args():
     parser.add_argument('--gpu',  dest='gpu_id', type=str, default='0')
     parser.add_argument('--data_dir', dest='data_dir', type=str, default='')
     parser.add_argument('--manualSeed', type=int, help='manual seed')
+    parser.add_argument('--train_emb', action='store_true')
     args = parser.parse_args()
     return args
 
@@ -56,7 +58,18 @@ if __name__ == "__main__":
                  (cfg.DATASET_NAME, cfg.CONFIG_NAME, timestamp)
 
     num_gpu = len(cfg.GPU_ID.split(','))
-    if cfg.TRAIN.FLAG:
+    if args.train_emb:
+        print('Train Embedding Net')
+        train_set = AudioSetAudio(cfg.DATA_DIR)
+        eval_set = AudioSetAudio(cfg.EVAL_DATA_DIR)
+        trainer = EmbeddingNetTrainer(cfg, output_dir)
+        trainer.train(train_set, eval_set)
+
+        output_dir = '../output/%s_%s_%s' % \
+                     (cfg.DATASET_NAME, cfg.CONFIG_NAME + 'LSTM', timestamp)
+        trainer = EmbeddingNetLSTMTrainer(cfg, output_dir)
+        trainer.train(train_set, eval_set)
+    elif cfg.TRAIN.FLAG:
         image_transform = transforms.Compose([
             transforms.RandomCrop(cfg.IMSIZE),
             transforms.RandomHorizontalFlip(),
@@ -65,7 +78,8 @@ if __name__ == "__main__":
         if cfg.DATASET_NAME == 'gif':
             dataset = GIFDataset(cfg.DATA_DIR, cfg.TEXT.DIMENSION, imsize=cfg.IMSIZE, stage=cfg.STAGE)
         elif cfg.DATASET_NAME == 'audioset':
-            dataset = AudioSet(cfg.DATA_DIR)
+            dataset = AudioSet(cfg.DATA_DIR, frame_hop_size=cfg.VIDEO.HOP_SIZE,
+                               n_frames=cfg.VIDEO.N_FRAMES, stage=cfg.STAGE)
         else:
             dataset = TextDataset(cfg.DATA_DIR, 'train',
                                   imsize=cfg.IMSIZE,

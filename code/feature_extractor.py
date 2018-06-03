@@ -4,7 +4,7 @@ import librosa
 import os, json, time
 import cv2
 
-data_dir = '../data/train'
+data_dir = '../data/eval'
 ontology_fp = '../data/ontology/small_ontology.json'
 labels_fp = '../data/ontology/small_label.json'
 audio_dir = os.path.join(data_dir, 'audio')
@@ -98,7 +98,7 @@ def extract(feat_type='melspec', exclude_extracted=True):
 
     print('{} pairs of data. ({} audio, {} video)'.format(len(data_list), len(audio_list), len(video_list)))
 
-    sample_info = np.load(os.path.join(data_dir, 'train_samples.npy')).item()
+    sample_info = np.load(os.path.join(data_dir, 'samples_list.npy')).item()
     samples = []
     too_much_label = 0
     with open(labels_fp) as f:

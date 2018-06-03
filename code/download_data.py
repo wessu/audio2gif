@@ -1,8 +1,8 @@
 # Path to ffmpeg
 ffmpeg_path = '../bin/ffmpeg/ffmpeg'
 ontology_fp = '../data/ontology/small_ontology.json'
-data_list_fp = '../data/unbalanced_train_segments.csv'
-train_data_dir = '../data/train/'
+data_list_fp = '../data/eval_segments.csv'
+data_dir = '../data/eval/'
 
 import sys
 import os.path
@@ -50,14 +50,18 @@ def select_data(id_list):
 
 def download_data(save_dir, samples):
 
-    if not os.path.isdir(save_dir):
-        os.makedirs(save_dir)
+    save_audio_dir = os.path.join(save_dir, 'audio')
+    save_video_dir = os.path.join(save_dir, 'video')
+    if not os.path.isdir(save_audio_dir):
+        os.makedirs(save_audio_dir)
+    if not os.path.isdir(save_video_dir):
+        os.makedirs(save_video_dir)
 
     original_stdout = sys.stdout
     manager = mp.Manager()
     q = manager.Queue()
     pool = mp.Pool(processes=8)
-    args = [(save_dir, idx, len(samples), sample) for idx, sample in enumerate(samples)]
+    args = [(save_audio_dir, save_video_dir, idx, len(samples), sample) for idx, sample in enumerate(samples)]
     results = pool.starmap(download_one_sample, args)
     # results = [pool.apply(download_one_sample, args=(save_dir, idx, len(samples), sample)) for idx, sample in enumerate(samples)]
     failed_list = list(filter(lambda a: a != None, results))
@@ -70,7 +74,7 @@ def download_data(save_dir, samples):
     if len(failed_list) > 0:
         np.savetxt(os.path.join(save_dir, 'failed_download_list.txt'), failed_list, fmt='%s')
 
-def download_one_sample(save_dir, idx, n_samples, sample):
+def download_one_sample(audio_dir, video_dir, idx, n_samples, sample):
     # print("Running on {}".format(os.getpid()))
     print("{}/{}. YouTube ID: {}. Window: ({}, {})".format(idx+1, n_samples, sample.ytid, sample.start_t, sample.end_t))
 
@@ -93,8 +97,8 @@ def download_one_sample(save_dir, idx, n_samples, sample):
         # Get output video and audio filepaths
         duration = sample.end_t - sample.start_t
         basename_fmt = 'yt_{}_{}_{}'.format(sample.ytid, int(sample.start_t), int(sample.end_t))
-        video_filepath = os.path.join(save_dir, basename_fmt + '.' + video_container)
-        audio_filepath = os.path.join(save_dir, basename_fmt + '.' + audio_codec)
+        video_filepath = os.path.join(video_dir, basename_fmt + '.' + video_container)
+        audio_filepath = os.path.join(audio_dir, basename_fmt + '.' + audio_codec)
 
 
         # Download the video
@@ -143,7 +147,7 @@ def download_one_sample(save_dir, idx, n_samples, sample):
 
 def save_samples(samples):
     sample_dict = {s.ytid: {'start_t':s.start_t, 'end_t':s.end_t, 'cids':s.cids} for s in samples}
-    np.save('../data/train_samples', sample_dict)
+    np.save(os.path.join(data_dir, 'samples_list.npy'), sample_dict)
 
 
 if __name__ == "__main__":
@@ -153,5 +157,7 @@ if __name__ == "__main__":
     print(ont_dict)
     id_list = ont_dict.values()
     samples = select_data(id_list)
+    if not os.path.isdir(data_dir):
+        os.makedirs(data_dir)
     save_samples(samples)
-    # download_data(train_data_dir, samples)
+    # download_data(data_dir, samples)

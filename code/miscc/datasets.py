@@ -14,6 +14,7 @@ import random
 import numpy as np
 import pandas as pd
 import time
+import multiprocessing as mp
 from torch.utils.data import Dataset, DataLoader
 from feature_extractor import extract_features
 
@@ -208,9 +209,12 @@ class TextDataset(data.Dataset):
 
 
 class AudioSet(Dataset):
-    def __init__(self, root_dir):
+    def __init__(self, root_dir, frame_hop_size=2, n_frames=5, stage=1):
         self.root_dir = root_dir
         self.fn_list = list(filter(lambda k: '.npz' in k, os.listdir(self.root_dir)))
+        self.frame_hop_size = frame_hop_size
+        self.n_frames = n_frames
+        self.stage = stage
 
     def __len__(self):
         return len(self.fn_list)
@@ -218,7 +222,33 @@ class AudioSet(Dataset):
     def __getitem__(self, idx):
         fp = os.path.join(self.root_dir, self.fn_list[idx])
         sample = dict(np.load(fp))
+        if self.stage == 1:
+            sample['video'] = self.select_image(sample['video'])
+        elif self.stage == 2:
+            sample['video'] = self.select_frames(sample['video'])
+        elif self.stage == 0: # Train embedding net. Return audio features only.
+            # sample.pop('video', None)
+            pass
+        else:
+            raise Exception('Stage should be either 1 or 2. Not {}.'.format(self.stage))
+
         return sample
+
+    def select_frames(self, video):
+        last_start = video.shape[0] - self.frame_hop_size * self.n_frames
+        idx = np.random.randint(0, last_start)
+        gif = video[idx:idx+self.frame_hop_size*self.n_frames:self.frame_hop_size]
+        return gif
+
+    def select_image(self, video):
+        last_start = video.shape[0] - self.frame_hop_size * self.n_frames
+        # idx = np.random.randint(0, last_start)
+        idx = 10
+        img = video[idx].transpose((1, 2, 0))
+        img = Image.fromarray(img, 'RGB')
+        img = img.resize((64, 64), Image.BILINEAR)
+        img = np.array(img.convert('RGB')).transpose((2, 1, 0)) # size, size , 3
+        return img
 
 class AudioSet2(Dataset):
     def __init__(self, samples_npy):
@@ -233,6 +263,54 @@ class AudioSet2(Dataset):
         audio_feat, video_feat = extract_features(fn, label, save=False)
         sample = {'audio':audio_feat, 'video':video_feat, 'label':label}
         return sample
+
+class AudioSetAudio(Dataset):
+    def __init__(self, root_dir, wrap=True):
+        self.samples = []
+        if wrap:
+            self.root_dir = os.path.join(root_dir, 'wrap')
+            self.fn_list = list(filter(lambda k: '.npy' in k, os.listdir(self.root_dir)))
+        else:
+            self.root_dir = root_dir
+            self.fn_list = list(filter(lambda k: '.npz' in k, os.listdir(self.root_dir)))
+
+        print('Loading data...')
+        st = time.time()
+        
+        if wrap:
+            for fn in self.fn_list:
+                fp = os.path.join(self.root_dir, fn)
+                samples = np.load(fp)
+                self.samples += samples.tolist()
+            # pool.map(self.load_wrap, self.fn_list)
+            # self.samples = np.concatenate(self.samples).tolist()
+            print(len(self.samples))
+        else:
+            manager = mp.Manager()
+            q = manager.Queue()
+            pool = mp.Pool(processes=3)
+            self.samples = pool.map(self.load, self.fn_list)
+            q.put('kill')
+            pool.close()
+        print('Take {} mins to load data'.format((time.time()-st)/60.0))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        return self.samples[idx]
+
+    def load(self, fn):
+        fp = os.path.join(self.root_dir, fn)
+        sample = dict(np.load(fp))
+        sample.pop('video')
+        return sample
+
+    def load_wrap(self, fn):
+        fp = os.path.join(self.root_dir, fn)
+        samples = np.load(fp)
+        self.samples += samples.tolist()
+        return None
 
 if __name__ == "__main__":
     st = time.time()

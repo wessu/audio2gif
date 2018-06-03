@@ -22,11 +22,13 @@ __C.NET_G = ''
 __C.NET_D = ''
 __C.STAGE1_G = ''
 __C.DATA_DIR = ''
+__C.EVAL_DATA_DIR = ''
 __C.VIS_COUNT = 64
 
 __C.Z_DIM = 100
 __C.IMSIZE = 64
 __C.STAGE = 1
+__C.NUM_CLASSES = 10
 
 
 # Training options
@@ -54,6 +56,15 @@ __C.GAN.R_NUM = 4
 __C.TEXT = edict()
 __C.TEXT.DIMENSION = 1024
 
+__C.AUDIO = edict()
+__C.AUDIO.FEATURE_DIM = 128
+__C.AUDIO.DIMENSION = 2048
+
+__C.VIDEO = edict()
+__C.VIDEO.HOP_SIZE = 2
+__C.VIDEO.N_FRAMES = 5
+
+
 
 def _merge_a_into_b(a, b):
     """Merge config dictionary a into config dictionary b, clobbering the
@@ -64,7 +75,7 @@ def _merge_a_into_b(a, b):
 
     for k, v in a.items():
         # a must specify keys that are in b
-        print(b)
+        # print(b)
         if k not in b:
             raise KeyError('{} is not a valid config key'.format(k))
 

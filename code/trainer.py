@@ -24,6 +24,8 @@ from miscc.utils import compute_discriminator_loss, compute_generator_loss
 import tensorflow as tf
 # from tensorflow.summary import FileWriter
 
+from torchsummary import summary
+
 class GANTrainer(object):
     def __init__(self, output_dir):
         if cfg.TRAIN.FLAG:
@@ -51,7 +53,7 @@ class GANTrainer(object):
 
     def load_network_embedding(self):
         from model import EmbeddingNet
-        netE = EmbeddingNet()
+        netE = EmbeddingNet(cfg.AUDIO.FEATURE_DIM, cfg.AUDIO.DIMENSION)
         netE.apply(weights_init)
         if cfg.CUDA:
             netE.cuda()
@@ -128,14 +130,15 @@ class GANTrainer(object):
             netG, netD = self.load_network_stageII()
 
         if cfg.DATASET_NAME == 'audioset':
+            # print('building')
             netE = self.load_network_embedding()
+            # print('done building')
+            # summary(netE, input_size=(128, 430))
 
         nz = cfg.Z_DIM
         batch_size = self.batch_size
         noise = Variable(torch.FloatTensor(batch_size, nz))
-        fixed_noise = \
-            Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
-                     requires_grad=False)
+        fixed_noise = torch.FloatTensor(batch_size, nz).normal_(0, 1)
         real_labels = Variable(torch.FloatTensor(batch_size).fill_(1))
         fake_labels = Variable(torch.FloatTensor(batch_size).fill_(0))
         if cfg.CUDA:
@@ -172,8 +175,13 @@ class GANTrainer(object):
                 # (1) Prepare training data
                 ######################################################
                 if cfg.DATASET_NAME == 'audioset':
-                    audio_feature, real_img_cpu = data
-                    embedding = netE(audio_feature) #
+                    if cfg.CUDA:
+                        audio_feat = data['audio'].to(device=torch.device('cuda'), dtype=torch.float)
+                        real_imgs = data['video'].to(device=torch.device('cuda'), dtype=torch.float)
+                    else:
+                        audio_feat = data['audio'].type(torch.FloatTensor)
+                        real_imgs = data['video'].type(torch.FloatTensor)
+                    embedding = netE(audio_feat) #
                 else:
                     real_img_cpu, embedding = data
                     real_img_cpu = real_img_cpu.type(torch.FloatTensor)
@@ -233,14 +241,13 @@ class GANTrainer(object):
                     # self.summary_writer.add_summary(summary_KL, count)
 
                     # save the image result for each epoch
-                    print('iter', i)
                     inputs = (embedding, fixed_noise)
                     if cfg.CPU:
                         lr_fake, fake, _, _ = netG(*inputs)
                     else:
                         lr_fake, fake, _, _ = \
                             nn.parallel.data_parallel(netG, inputs, self.gpus)
-                    save_img_results(real_img_cpu, fake, epoch, self.image_dir)
+                    save_img_results(real_imgs, fake, epoch, self.image_dir)
                     if lr_fake is not None:
                         save_img_results(None, lr_fake, epoch, self.image_dir)
             end_t = time.time()
@@ -318,3 +325,106 @@ class GANTrainer(object):
                 im.save(save_name)
             count += batch_size
 
+class EmbeddingNetTrainer(object):
+    def __init__(self, cfg, output_dir=None, model=None):
+        self.output_dir = output_dir
+        self.feature_dim = cfg.AUDIO.FEATURE_DIM
+        self.output_dim = cfg.AUDIO.DIMENSION
+        self.use_gpu = cfg.CUDA
+        self.epochs = cfg.TRAIN.MAX_EPOCH
+        self.n_workers = int(cfg.WORKERS)
+        self.batch_size = cfg.TRAIN.BATCH_SIZE
+        self.learning_rate = 1e-4
+        self.num_classes = cfg.NUM_CLASSES
+        if model is not None:
+            self.model = model
+        else:
+            self.build_model()
+        if self.use_gpu:
+            self.model = self.model.to(device=torch.device('cuda'))
+
+    def build_model(self):
+        from model import EmbeddingNet
+        self.model = nn.Sequential( EmbeddingNet(self.feature_dim, self.output_dim),
+                                    nn.Linear(self.output_dim, self.num_classes)
+                                    )
+    def train(self, train_set, eval_set=None):
+        dataloader = torch.utils.data.DataLoader(
+            train_set, batch_size=self.batch_size,
+            shuffle=True, num_workers=self.n_workers)
+        optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        best_eval_acc = -1.0
+        for e in range(self.epochs):
+            print('Epoch %d / %d' % (e, self.epochs))
+            # Train
+            num_correct = 0
+            num_samples = 0
+            for i, data in enumerate(dataloader):
+                self.model = self.model.train()  # put model to training mode
+                x = data['audio']
+                y = data['label']
+                if self.use_gpu:
+                    x = x.to(device=torch.device('cuda'), dtype=torch.float)
+                    y = y.to(device=torch.device('cuda'), dtype=torch.long)
+
+                scores = self.model(x)
+                scores = scores.view(-1, self.num_classes)
+                loss = torch.nn.functional.cross_entropy(scores, y)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                with torch.no_grad():
+                    _, preds = scores.max(1)
+                    num_correct += (preds == y).sum()
+                    num_samples += preds.size(0)
+
+                if i % 200 == 0:
+                    print('Epoch %d, Iteration %d, loss = %.4f' % (e, i, loss.item()))
+
+            acc = float(num_correct) / num_samples if num_samples > 0 else 0.0
+            print('Epoch %d' % (e))
+            print('Train: Got %d / %d correct (%.2f)' % (num_correct, num_samples, 100 * acc))
+
+            # Evaluate
+            if eval_set is not None:
+                acc = self.evaluate(eval_set)
+                if acc >= best_eval_acc and self.output_dir is not None:
+                    save_dir = os.path.join(self.output_dir, 'embnet')
+                    mkdir_p(save_dir)
+                    torch.save( self.model.state_dict(), 
+                                os.path.join(save_dir, 'embnet.pth')
+                                )
+                    print('Save Embedding Net model')
+                    best_eval_acc = acc
+                                
+
+    def evaluate(self, eval_set):
+        dataloader = torch.utils.data.DataLoader(
+            eval_set, batch_size=self.batch_size, num_workers=self.n_workers)
+        num_correct = 0
+        num_samples = 0
+        model = self.model.eval()  # set model to evaluation mode
+        with torch.no_grad():
+            for i, data in enumerate(dataloader):
+                x = data['audio']
+                y = data['label']
+                if self.use_gpu:
+                    x = x.to(device=torch.device('cuda'), dtype=torch.float)  # move to device, e.g. GPU
+                    y = y.to(device=torch.device('cuda'), dtype=torch.long)
+                scores = model(x)
+                scores = scores.view(-1, self.num_classes)
+                loss = torch.nn.functional.cross_entropy(scores, y)
+                _, preds = scores.max(1)
+                num_correct += (preds == y).sum()
+                num_samples += preds.size(0)
+            acc = float(num_correct) / num_samples if num_samples > 0 else 0.0
+            print('Eval:  Got %d / %d correct (%.2f), loss %.4f' % (num_correct, num_samples, 100 * acc, loss.item()))
+        return acc
+
+class EmbeddingNetLSTMTrainer(EmbeddingNetTrainer):
+    def build_model(self):
+        from model import EmbeddingNetLSTM
+        self.model = nn.Sequential( EmbeddingNetLSTM(self.feature_dim, self.output_dim),
+                                    nn.Linear(self.output_dim, self.num_classes)
+                                    )

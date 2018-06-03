@@ -2,9 +2,9 @@ CONFIG_NAME: 'stageI'
 
 DATASET_NAME: 'audioset'
 # EMBEDDING_TYPE: 'cnn-rnn'
-# GPU_ID: '0,1'
-CUDA: False
-CPU: True
+GPU_ID: '0,1'
+CUDA: True
+CPU: False
 Z_DIM: 100
 DATA_DIR: '../data/demo/feature/melspec'
 IMSIZE: 240 # resize to (not crop)
@@ -13,8 +13,8 @@ STAGE: 1
 # STAGE1_G: '../output/gif_stageI_2018_05_24_15_46_50/Model/netG_epoch_25.pth'
 TRAIN:
     FLAG: True
-    BATCH_SIZE: 2
-    MAX_EPOCH: 25
+    BATCH_SIZE: 10
+    MAX_EPOCH: 100
     LR_DECAY_EPOCH: 20
     SNAPSHOT_INTERVAL: 10
     DISCRIMINATOR_LR: 0.0002
@@ -28,5 +28,9 @@ GAN:
     GF_DIM: 192
 
 AUDIO:
-    FEATURE_DIM: 256
-    DIMENSION: 256
+    FEATURE_DIM: 128
+    DIMENSION: 2048
+
+VIDEO:
+    N_FRAMES: 5
+    HOP_SIZE: 2

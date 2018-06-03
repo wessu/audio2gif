@@ -13,7 +13,7 @@ def conv3_1dxn(in_planes, out_planes, n_layers, stride=1, padding=False):
     in_planes = [in_planes] + [out_planes] * (n_layers - 1)
     seqs = [nn.Sequential(
         conv3_1d(in_plane, out_planes, stride, padding),
-        nn.BatchNorm2d(out_planes),
+        nn.BatchNorm1d(out_planes),
         nn.LeakyReLU(0.2, inplace=True)
         ) for in_plane in in_planes]
     return nn.Sequential(*seqs)
@@ -52,9 +52,10 @@ class Squeeze(nn.Module):
         return torch.squeeze(x)  # "flatten" the C * H * W values into a single vector per image
 
 class EmbeddingNet(nn.Module):
-    def __init__(self, feat_dim):
+    def __init__(self, feat_dim, out_dim):
         super(EmbeddingNet, self).__init__()
         self.feat_dim = feat_dim
+        self.out_dim = out_dim
         self.define_module()
         
     def define_module(self):
@@ -64,40 +65,85 @@ class EmbeddingNet(nn.Module):
             conv3_1dxn(256, 512, 5),
             nn.MaxPool1d(2),
             conv3_1d(512, 1024, stride=2, padding=True),
-            conv3_1d(1024, 1024, stride=2, padding=True),
-            nn.LSTM(1024, 1024)
+            conv3_1d(1024, 1024, stride=2, padding=True), # 25
+            conv3_1d(1024, 2048, stride=2, padding=False), # 12
+            nn.MaxPool1d(12),
+            Squeeze(), # shape (N, 2048)
+            nn.Linear(2048, self.out_dim)
             )
-        self.embedding_net_2 = nn.Sequential(
-            Transpose(0, 2), 
-            Transpose(0, 1), 
-            nn.MaxPool1d(5),
-            Flatten(), # (N, 1024 * 5)
-            nn.Linear()
-            )
+        # self.lstm = nn.LSTM(1024, 1024)
+        # self.embedding_net_2 = nn.Sequential(
+            # Flatten(), # (N, 1024 * 5)
+            # nn.Linear(1024 * 5, 128 * 5)
+            # )
+
+        # self.e3 = nn.Sequential(
+        #     Flatten(),
+        #     nn.Linear(128*430, 1024)
+        #     )
 
     def forward(self, features):
-        output, (h, c) = self.embedding_net_1(features)
-        return embedding_net_2(output)
+        output = self.embedding_net_1(features)
+        return output
+        # output = torch.transpose(output, 1, 2)
+        # output = torch.transpose(output, 0, 1)
+
+        # output, (h,c) = self.lstm(output)
+        # output = torch.transpose(output, 0, 2)
+        # output = torch.transpose(output, 0, 1)
+        # return self.embedding_net_2(output)
+        # return self.e3(features)
+
+class EmbeddingNetLSTM(nn.Module):
+    def __init__(self, feat_dim, out_dim):
+        super(EmbeddingNetLSTM, self).__init__()
+        self.feat_dim = feat_dim
+        self.out_dim = out_dim
+        self.define_module()
+        
+    def define_module(self):
+        self.embedding_net_1 = nn.Sequential(
+            conv3_1dxn(self.feat_dim, 256, 5),
+            nn.MaxPool1d(2),
+            conv3_1dxn(256, 512, 5),
+            nn.MaxPool1d(2),
+            conv3_1d(512, 1024, stride=2, padding=True),
+            conv3_1d(1024, 1024, stride=2, padding=True) # 25
+            )
+        self.lstm = nn.LSTM(1024, 512)
+        self.embedding_net_2 = nn.Sequential(
+            nn.MaxPool1d(5),
+            Flatten(), # (N, 1024 * 5)
+            nn.Linear(512 * 5, self.out_dim)
+            )
+
+        # self.e3 = nn.Sequential(
+        #     Flatten(),
+        #     nn.Linear(128*430, 1024)
+        #     )
+
+    def forward(self, features):
+        output = self.embedding_net_1(features)
+        output = torch.transpose(output, 1, 2)
+        output = torch.transpose(output, 0, 1)
+
+        output, (h,c) = self.lstm(output)
+        output = torch.transpose(output, 0, 1)
+        output = torch.transpose(output, 1, 2)
+        return self.embedding_net_2(output)
+        # return self.e3(features)
 
 class Flatten(nn.Module):
     def forward(self, x):
         N, F, T = x.size()
         return x.view(N, -1)
 
-class Transpose(nn.Module):
-    def __init__(self):
-        self.dim0 = dim0
-        self.dim1 = dim1
-    def forward(self, x):
-        return torch.transpose(x, self.dim0, self.dim0)
-
-
 class CA_NET(nn.Module):
     # some code is modified from vae examples
     # (https://github.com/pytorch/examples/blob/master/vae/main.py)
     def __init__(self):
         super(CA_NET, self).__init__()
-        self.t_dim = cfg.TEXT.DIMENSION
+        self.t_dim = cfg.AUDIO.DIMENSION
         self.c_dim = cfg.GAN.CONDITION_DIM
         self.fc = nn.Linear(self.t_dim, self.c_dim * 2, bias=True)
         self.relu = nn.ReLU()
