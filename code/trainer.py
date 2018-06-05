@@ -182,7 +182,7 @@ class GANTrainer(object):
 
 
             # reuse data everytime
-            for i in range(5000):
+            for i in range(500):
             #for i, data in enumerate(data_loader, 0):
                 ######################################################
                 # (1) Prepare training data
@@ -251,7 +251,7 @@ class GANTrainer(object):
                 # output progress
                 ###########################
 
-                if i % 100 == 0:
+                if i % 50 == 0:
                     if cfg.TRAIN.USE_WGAN:
                         self.summary_writer.add_scalar('D_Loss', errD, count)
                         if i != 0:

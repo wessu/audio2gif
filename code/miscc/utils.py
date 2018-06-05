@@ -47,7 +47,7 @@ def compute_gradient_penalty(netD, real_data, fake_data, lam, gpus):
     return gradient_penalty
 
 
-def compute_generator_wgan_loss(netD, fake_imgs, conditions, gpus, cond=True):
+def compute_generator_wgan_loss(netD, fake_imgs, conditions, gpus, use_cond=True):
     cond = conditions.detach()
     if cfg.CPU:
         fake_features = netD(fake_imgs)
@@ -55,20 +55,12 @@ def compute_generator_wgan_loss(netD, fake_imgs, conditions, gpus, cond=True):
         fake_features = nn.parallel.data_parallel(netD, (fake_imgs), gpus)
     # fake pairs
     inputs = (fake_features, cond)
-    if cond:
-        if cfg.CPU:
-            fake_logits_cond = netD.get_cond_logits(*inputs)
-        else:
-            fake_logits_cond = nn.parallel.data_parallel(netD.get_cond_logits, inputs, gpus)
     if cfg.CPU:
-        fake_logits_uncond = netD.get_cond_logits(*inputs)
+        fake_logits_cond = netD.get_cond_logits(*inputs)
     else:
-        fake_logits_uncond = nn.parallel.data_parallel(netD.get_uncond_logits, (fake_features), gpus)
+        fake_logits_cond = nn.parallel.data_parallel(netD.get_cond_logits, inputs, gpus)
 
-    if cond:
-        errG_fake = (fake_logits_cond.mean() + fake_logits_uncond.mean())/2
-    else:
-        errG_fake = fake_logits_uncond.mean()
+    errG_fake = fake_logits_cond.mean()
     return errG_fake
 
 
