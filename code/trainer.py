@@ -137,8 +137,8 @@ class GANTrainer(object):
         wgan_d_count = 0
         batch_size = self.batch_size
         noise = Variable(torch.FloatTensor(batch_size, nz))
-        fixed_noise_test =  Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
-                     requires_grad=False)
+        #fixed_noise_test =  Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
+        #             requires_grad=False)
         fixed_noise = \
             Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
                      requires_grad=False)
@@ -147,7 +147,7 @@ class GANTrainer(object):
         if cfg.CUDA:
             noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
             real_labels, fake_labels = real_labels.cuda(), fake_labels.cuda()
-            fixed_noise_test = fixed_noise_test.cuda()
+            #fixed_noise_test = fixed_noise_test.cuda()
         one = torch.FloatTensor([1])
         mone = one * -1
 
@@ -170,8 +170,8 @@ class GANTrainer(object):
                                 betas=(cfg.TRAIN.ADAM_BETA1, cfg.TRAIN.ADAM_BETA2))
         count = 0
         # fix data to overfit
-        for data in data_loader:
-            break
+        #for data in data_loader:
+        #    break
         for epoch in range(self.max_epoch):
             start_t = time.time()
             print("running epoch {}".format(epoch))
@@ -185,8 +185,8 @@ class GANTrainer(object):
 
 
             # reuse data everytime
-            for i in range(500):
-            #for i, data in enumerate(data_loader, 0):
+            #for i in range(500):
+            for i, data in enumerate(data_loader, 0):
                 ######################################################
                 # (1) Prepare training data
                 ######################################################
@@ -212,8 +212,8 @@ class GANTrainer(object):
                 # (2) Generate fake images
                 ######################################################
                 noise.data.normal_(0, 1)
-                # inputs = (embedding, noise)
-                inputs = embedding, fixed_noise_test
+                inputs = (embedding, noise)
+                # inputs = embedding, fixed_noise_test
                 if cfg.CPU:
                     _, fake_imgs, mu, logvar = netG(*inputs)
                 else:
@@ -247,6 +247,9 @@ class GANTrainer(object):
                                                             mu, self.gpus)
                         errG.backward(mone)
                         errG = -errG
+                        #for param in netD.parameters():
+                            #if param.requires_grad:
+                                # print(param.grad)   
                     else:
                         errG = compute_generator_loss(netD, fake_imgs,
                                                       real_labels, mu, self.gpus)
@@ -274,8 +277,8 @@ class GANTrainer(object):
                         self.summary_writer.add_scalar('G_loss', errG.data[0],count)
                         self.summary_writer.add_scalar('KL_loss', kl_loss.data[0],count)
                     # save the image result for each epoch
-                    #inputs = (embedding, fixed_noise)
-                    inputs = (embedding, fixed_noise_test)
+                    inputs = (embedding, fixed_noise)
+                    #inputs = (embedding, fixed_noise_test)
                     if cfg.CPU:
                         lr_fake, fake, _, _ = netG(*inputs)
                     else:
