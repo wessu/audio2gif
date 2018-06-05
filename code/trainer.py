@@ -144,7 +144,7 @@ class GANTrainer(object):
         if cfg.CUDA:
             noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
             real_labels, fake_labels = real_labels.cuda(), fake_labels.cuda()
-            fixed_noise_test = fixed_noise_test.cuda()
+            #fixed_noise_test = fixed_noise_test.cuda()
         one = torch.FloatTensor([1])
         mone = one * -1
 
