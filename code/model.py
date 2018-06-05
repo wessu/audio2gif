@@ -90,12 +90,12 @@ class D_GET_LOGITS(nn.Module):
                 conv3x3_2d(ndf * 8 + nef, ndf * 8),
                 nn.BatchNorm2d(ndf * 8),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4),
-                nn.Sigmoid())
+                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4))
+                # nn.Sigmoid())
         else:
             self.outlogits = nn.Sequential(
-                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4),
-                nn.Sigmoid())
+                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4))
+               # nn.Sigmoid())
 
     def forward(self, h_code, c_code=None):
         # conditioning output
