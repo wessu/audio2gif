@@ -90,9 +90,10 @@ def compute_discriminator_wgan_loss(netD, real_imgs, fake_imgs, gpus, conditions
         fake_logits = nn.parallel.data_parallel(netD.get_cond_logits, inputs, gpus)
     real_logit = real_logits.mean()
     fake_logit = fake_logits.mean()
-    wgan_loss = (fake_logit - real_logit) + compute_gradient_penalty(netD, real_imgs, fake_imgs, lam, gpus)
+    gradient_penalty = compute_gradient_penalty(netD, real_imgs, fake_imgs, lam, gpus)
+    wgan_loss = (fake_logit - real_logit) + gradient_penalty
     wasserstein_d = real_logit - fake_logit
-    return wgan_loss, wasserstein_d
+    return wgan_loss, wasserstein_d, gradient_penalty
 
 
 

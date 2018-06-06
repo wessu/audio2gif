@@ -137,13 +137,8 @@ class GANTrainer(object):
         wgan_d_count = 0
         batch_size = self.batch_size
         noise = Variable(torch.FloatTensor(batch_size, nz))
-<<<<<<< HEAD
-        #fixed_noise_test =  Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
-        #             requires_grad=False)
-=======
         fixed_noise_test =  Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
                      requires_grad=False)
->>>>>>> d5326c9f0613ece353a88ef5289538e473737569
         fixed_noise = \
             Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
                      requires_grad=False)
@@ -190,11 +185,7 @@ class GANTrainer(object):
 
 
             # reuse data everytime
-<<<<<<< HEAD
-            #for i in range(500):
-=======
             #for i in range(100):
->>>>>>> d5326c9f0613ece353a88ef5289538e473737569
             for i, data in enumerate(data_loader, 0):
                 ######################################################
                 # (1) Prepare training data
@@ -235,7 +226,7 @@ class GANTrainer(object):
                 netD.zero_grad()
                 if cfg.TRAIN.USE_WGAN:
                     wgan_d_count += 1
-                    errD, wasserstein_d = compute_discriminator_wgan_loss(netD, real_imgs, fake_imgs, self.gpus, mu, cfg.WGAN.LAMBDA)
+                    errD, wasserstein_d, gp = compute_discriminator_wgan_loss(netD, real_imgs, fake_imgs, self.gpus, mu, cfg.WGAN.LAMBDA)
                     errD.backward()
                     skip_generator_update = (wgan_d_count % cfg.WGAN.N_D != 0)
                 else:
@@ -252,6 +243,7 @@ class GANTrainer(object):
                 if not skip_generator_update:
                     netG.zero_grad()
                     if cfg.TRAIN.USE_WGAN:
+                        print("Here")
                         errG = compute_generator_wgan_loss(netD, fake_imgs,
                                                             mu, self.gpus)
                         errG.backward(mone)
@@ -273,9 +265,11 @@ class GANTrainer(object):
 
                 if i % 100 == 0:
                     if cfg.TRAIN.USE_WGAN:
+                        self.summary_writer.add_scalar('GP', gp, count)
                         self.summary_writer.add_scalar('D_Loss', errD, count)
-                        if i != 0:
-                            self.summary_writer.add_scalar('G_loss', errG, count)
+                        if i == 0:
+                            errG = 0
+                        self.summary_writer.add_scalar('G_loss', errG, count)
                         self.summary_writer.add_scalar('W_Loss', wasserstein_d,count)
                     else:
                         self.summary_writer.add_scalar('D_loss', errD.data[0],count)

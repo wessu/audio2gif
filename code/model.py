@@ -263,17 +263,17 @@ class STAGE1_D(nn.Module):
             # state size. (ndf) x 32 x 32
             nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
             nn.LayerNorm([ndf*2, 16, 16]),
-	    #nn.BatchNorm2d(ndf * 2),
+	        #nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace=True),
             # state size (ndf*2) x 16 x 16
             nn.Conv2d(ndf*2, ndf * 4, 4, 2, 1, bias=False),
             #nn.BatchNorm2d(ndf * 4),
-	    nn.LayerNorm([ndf*4, 8, 8]),
+	        nn.LayerNorm([ndf*4, 8, 8]),
             nn.LeakyReLU(0.2, inplace=True),
             # state size (ndf*4) x 8 x 8
             nn.Conv2d(ndf*4, ndf * 8, 4, 2, 1, bias=False),
             #nn.BatchNorm2d(ndf * 8),
-	    nn.LayerNorm([ndf*8, 4, 4]),
+	        nn.LayerNorm([ndf*8, 4, 4]),
             # state size (ndf * 8) x 4 x 4)
             nn.LeakyReLU(0.2, inplace=True),
         )
