@@ -21,8 +21,8 @@ from miscc.utils import KL_loss
 from miscc.utils import compute_discriminator_loss, compute_generator_loss
 from miscc.utils import compute_discriminator_wgan_loss, compute_generator_wgan_loss
 
-from torchsummary import summary
 from tensorboardX import SummaryWriter
+
 
 class GANTrainer(object):
     def __init__(self, output_dir):
@@ -137,8 +137,13 @@ class GANTrainer(object):
         wgan_d_count = 0
         batch_size = self.batch_size
         noise = Variable(torch.FloatTensor(batch_size, nz))
+<<<<<<< HEAD
         #fixed_noise_test =  Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
         #             requires_grad=False)
+=======
+        fixed_noise_test =  Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
+                     requires_grad=False)
+>>>>>>> d5326c9f0613ece353a88ef5289538e473737569
         fixed_noise = \
             Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
                      requires_grad=False)
@@ -185,7 +190,11 @@ class GANTrainer(object):
 
 
             # reuse data everytime
+<<<<<<< HEAD
             #for i in range(500):
+=======
+            #for i in range(100):
+>>>>>>> d5326c9f0613ece353a88ef5289538e473737569
             for i, data in enumerate(data_loader, 0):
                 ######################################################
                 # (1) Prepare training data
@@ -213,7 +222,7 @@ class GANTrainer(object):
                 ######################################################
                 noise.data.normal_(0, 1)
                 inputs = (embedding, noise)
-                # inputs = embedding, fixed_noise_test
+                #inputs = embedding, fixed_noise_test
                 if cfg.CPU:
                     _, fake_imgs, mu, logvar = netG(*inputs)
                 else:
@@ -262,7 +271,7 @@ class GANTrainer(object):
                 # output progress
                 ###########################
 
-                if i % 50 == 0:
+                if i % 100 == 0:
                     if cfg.TRAIN.USE_WGAN:
                         self.summary_writer.add_scalar('D_Loss', errD, count)
                         if i != 0:
