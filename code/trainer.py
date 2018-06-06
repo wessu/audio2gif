@@ -134,8 +134,8 @@ class GANTrainer(object):
         wgan_d_count = 0
         batch_size = self.batch_size
         noise = Variable(torch.FloatTensor(batch_size, nz))
-        #fixed_noise_test =  Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
-        #             requires_grad=False)
+        fixed_noise_test =  Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
+                     requires_grad=False)
         fixed_noise = \
             Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1),
                      requires_grad=False)
@@ -182,7 +182,7 @@ class GANTrainer(object):
 
 
             # reuse data everytime
-            #for i in range(500):
+            #for i in range(100):
             for i, data in enumerate(data_loader, 0):
                 ######################################################
                 # (1) Prepare training data
@@ -205,7 +205,7 @@ class GANTrainer(object):
                 ######################################################
                 noise.data.normal_(0, 1)
                 inputs = (embedding, noise)
-                # inputs = embedding, fixed_noise_test
+                #inputs = embedding, fixed_noise_test
                 if cfg.CPU:
                     _, fake_imgs, mu, logvar = netG(*inputs)
                 else:
@@ -254,7 +254,7 @@ class GANTrainer(object):
                 # output progress
                 ###########################
 
-                if i % 50 == 0:
+                if i % 100 == 0:
                     if cfg.TRAIN.USE_WGAN:
                         self.summary_writer.add_scalar('D_Loss', errD, count)
                         if i != 0:
