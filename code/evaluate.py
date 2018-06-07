@@ -8,12 +8,11 @@ from torchvision.models.inception import inception_v3
 import numpy as np
 from scipy.stats import entropy
 from miscc.datasets import AudioSetImage
-from torch.nn import ot
 import os
 
 TRAIN = True
 SAVE_MODEL = True
-VAL = True
+VAL = False
 MODEL_NAME = '../data/inception_v3_pretrain'
 MAX_EPOCH = 10
 data_dir = '../data/audioset/train/feature/melspec/wrap_all'
@@ -83,6 +82,7 @@ def inception_score(imgs, inception_model=None, cuda=True, batch_size=32, resize
 if __name__ == '__main__':
 
     dataset = AudioSetImage(data_dir)
+    
     cuda = True
     if cuda:
         dtype = torch.cuda.FloatTensor
@@ -92,18 +92,29 @@ if __name__ == '__main__':
     if TRAIN:
         model = inception_v3(pretrained=True, transform_input=False).type(dtype)
         model.train()
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=64)
         optimizer = \
-            torch.optim.Adam(model, lr=1e-4)
+            torch.optim.Adam(model.parameters(), lr=1e-5)
         loss_fn = torch.nn.CrossEntropyLoss()
+        up = nn.Upsample(size=(299, 299), mode='bilinear').type(dtype)
         for epoch in range(MAX_EPOCH):
-            for data, i in enumerate(dataset):
+            for i, data in enumerate(dataloader):
                 img, label = data
+                img = img.type(torch.FloatTensor)                
+                label = img.type(torch.FloatTensor)
+                if cuda:
+                    img = img.cuda()
+                    label = label.cuda()
+                img = up(img)
                 optimizer.zero_grad()
                 pred = model(img)
+                print(pred)
                 loss = loss_fn(pred, label)
                 loss.backward()
                 optimizer.step()
-            print("Epoch {}/{}, training acc ".format(epoch, MAX_EPOCH))
+            predicted_label = torch.argmax(pred, dim=1)
+            acc = (predicted_label == label)/len(label)
+            print("Epoch {}/{}, loss {}, acc {} ".format(epoch, MAX_EPOCHi, loss, acc))
 
         if SAVE_MODEL:
             torch.save(model, MODEL_NAME)
