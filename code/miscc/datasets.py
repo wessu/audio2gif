@@ -327,6 +327,25 @@ class AudioSetAudio(Dataset):
         self.samples += samples.tolist()
         return None
 
+
+class AudioSetImage(Dataset):
+    def __init__(self, root_dir):
+        self.root_dir = root_dir
+        self.fn_list = list(filter(lambda k: '.npy' in k, os.listdir(self.root_dir)))
+        self.ft_type = 'image'
+        self.samples = []
+        for fn in self.fn_list:
+            fp = os.path.join(self.root_dir, fn)
+            samples = np.load(fp).tolist()
+            self.samples += [(s['image'][i], s['label']) for s in samples for i in range(s['image'].shape[0])]
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        return self.samples[idx] # This return a tuple (img, label)
+
+
 if __name__ == "__main__":
     st = time.time()
     # data_dir = '../data/train/feature/melspec_demo'
