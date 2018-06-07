@@ -23,6 +23,11 @@ TRAIN:
     GENERATOR_LR: 0.0002
     COEFF:
       KL: 2.0
+    USE_WGAN: TRUE
+    USE_WRONG_DATA: False
+    WGAN:
+      ADAM_BETA1: 0.5
+      ADAM_BETA: 0.9
 
 GAN:
     CONDITION_DIM: 128
@@ -36,3 +41,7 @@ AUDIO:
 VIDEO:
     N_FRAMES: 5
     HOP_SIZE: 2
+
+WGAN:
+    LAMBDA: 10
+    N_D: 5

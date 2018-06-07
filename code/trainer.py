@@ -251,11 +251,11 @@ class GANTrainer(object):
                 if not skip_generator_update:
                     netG.zero_grad()
                     if cfg.TRAIN.USE_WGAN:
-                        print("Here")
                         errG = compute_generator_wgan_loss(netD, fake_imgs,
                                                             mu, self.gpus)
                         errG.backward(mone)
                         errG = -errG
+                        print("iteration {}, LossG = {}".format(errG))
                         #for param in netD.parameters():
                             #if param.requires_grad:
                                 # print(param.grad)   
