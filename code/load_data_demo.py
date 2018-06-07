@@ -1,15 +1,22 @@
 import numpy as np
-import os
+import os, time
 import multiprocessing as mp
+from PIL import Image
 
-data_dir = '../data/audioset/train/feature/melspec'
-save_dir = os.path.join(data_dir, 'wrap')
+# data_dir = '../data/audioset/train/feature/melspec/'
+data_dir = '../data/demo/feature/melspec/'
+save_dir = os.path.join(data_dir, 'wrap_all')
+fl_dir = os.path.join(data_dir, 'wrap_all_fn_list')
 if not os.path.isdir(save_dir):
     os.makedirs(save_dir)
 
+if not os.path.isdir(fl_dir):
+    os.makedirs(fl_dir)
+
 # fn_list = list(filter(lambda k: '.npz' in k, os.listdir(data_dir)))
 # np.random.shuffle(fn_list)
-n = 9600
+n = 1000
+k = 3
 
 # def demo():
 #     for fn in os.listdir(data_dir):
@@ -19,62 +26,96 @@ n = 9600
 #         video_feature = features['video'] # Current shape: (100, 3, 240, 240). Type: uint8
 #         label = features['label'].item()  # A scalar. Type: int
 
+def combine(i):
+    feat_list = []
+    save_fp = os.path.join(save_dir, 'wrap_{}'.format(i))
+    if os.path.isfile(save_fp+'.npy'):
+        print('ignore', i)
+        return
+    fl = fn_list[i*n:(i+1)*n]
+    fl_fp = os.path.join(fl_dir, 'wrap_{}_fl'.format(i))
+    np.save(fl_fp, fl)
+    # fl = np.load(fl_fp+'.npy')
+    for fn in fl:
+        fp = os.path.join(data_dir, fn)
+        features = dict(np.load(fp))
+        features['video'] = np.array([select_frames(features['video']) for _ in range(k)])
+        features['image'] = np.array([select_image(features['video'][j]) for j in range(k)])
+        feat_list.append(features)
+        # if len(feat_list) % 100 == 0:
+        #     print('append {} to {}. ({}/{})'.format(fn, i, len(feat_list), len(fl)))
+    np.save(save_fp, feat_list)
+    print('wrap_{} saved'.format(i))
+
+frame_hop_size = 2
+n_frames = 5
+
+def select_frames(video):
+    last_start = video.shape[0] - frame_hop_size * n_frames
+    idx = np.random.randint(0, last_start)
+    gif = video[idx:idx+frame_hop_size*n_frames:frame_hop_size]
+    return gif
+
+def select_image(video):
+    # last_start = video.shape[0] - frame_hop_size * n_frames
+    # idx = np.random.randint(0, last_start)
+    # idx = 10
+    img = video[0].transpose((1, 2, 0))
+    img = Image.fromarray(img, 'RGB')
+    img = img.resize((64, 64), Image.BILINEAR)
+    img = np.array(img.convert('RGB')).transpose((2, 1, 0)) # size, size , 3
+    return img
+
+
+
 # def combine(i):
 #     feat_list = []
-#     fl = fn_list[i*n:(i+1)*n]
-#     fl_fp = os.path.join(save_dir, 'wrap_{}_fl'.format(i))
-#     np.save(fl_fp, fl)
+#     fl_fp = os.path.join(save_dir, 'wrap_all_{}.npy'.format(i))
+#     fl = np.load(fl_fp)
+#     print(len(fl))
 #     for fn in fl:
 #         fp = os.path.join(data_dir, fn)
 #         features = dict(np.load(fp))
 #         features.pop('video')
 #         feat_list.append(features)
-#         if len(feat_list) % 1000 == 0:
+#         if len(feat_list) % 500 == 0:
 #             print('append {} to {}. ({}/{})'.format(fn, i, len(feat_list), len(fl)))
-#     save_fp = os.path.join(save_dir, 'wrap_{}'.format(i))
+#     save_fp = os.path.join(save_dir, 'wrap_{}.npy'.format(i))
 #     np.save(save_fp, feat_list)
 #     print('wrap_{} saved'.format(i))
 
-def combine(i):
-    feat_list = []
-    fl_fp = os.path.join(save_dir, 'wrap_{}_fl.npy'.format(i))
-    fl = np.load(fl_fp)
-    print(len(fl))
-    for fn in fl:
-        fp = os.path.join(data_dir, fn)
-        features = dict(np.load(fp))
-        features.pop('video')
-        feat_list.append(features)
-        if len(feat_list) % 500 == 0:
-            print('append {} to {}. ({}/{})'.format(fn, i, len(feat_list), len(fl)))
-    save_fp = os.path.join(save_dir, 'wrap_{}.npy'.format(i))
-    np.save(save_fp, feat_list)
-    print('wrap_{} saved'.format(i))
+print('Wrap', data_dir, 'into', save_dir)
+fn_list = list(filter(lambda k: '.npz' in k, os.listdir(data_dir)))
+m = int(np.ceil(len(fn_list)/float(n)))
+print('{} / {} = {}'.format(len(fn_list), n, m))
 
-# print('Wrap', data_dir, 'into', save_dir)
-# m = int(np.ceil(len(fn_list)/float(n)))
-# print('{} / {} = {}'.format(len(fn_list), n, m))
+
 # manager = mp.Manager()
 # q = manager.Queue()
-# pool = mp.Pool(processes=2)
-# results = pool.map(combine, [2,4])
+# pool = mp.Pool(processes=4)
+# results = pool.map(combine, range(m))
 # q.put('kill')
 # pool.close()
 
-# print('Finish!')
+print('Finish!')
 
-for fn in ['wrap_0.npy', 'wrap_1.npy', 'wrap_2.npy', 'wrap_4.npy', 'wrap_3.npy', 'wrap_5.npy']:
+for fn in os.listdir(save_dir):
     print(fn)
     if 'fl' in fn:
         continue
     try:
+        st = time.time()
         w = np.load(os.path.join(save_dir, fn))
+        print('load %.4f secs' % (time.time()-st))
         print(len(w))
         print(w.shape)
-        print(w[0])
-        print(w[-1])
+        print(w[0].keys())
+        print(w[1]['image'].shape)
+        print(w[-1]['video'].shape)
+        print(w[-2]['audio'].shape)
         for _ in range(3):
-            print(w[np.random.randint(0,len(w))])
+            print(w[np.random.randint(0,len(w))]['label'])
+
     except Exception as err:
         print(fn, 'Error:', err)
     print()

@@ -141,11 +141,11 @@ def save_img_results(data_img, fake, epoch, image_dir):
                 normalize=True)
             # fake.data is still [-1, 1]
             vutils.save_image(
-                fake.data, '%s/fake_samples_epoch_%03d.png' %
+                fake.data, '%s/fake_samples_epoch_%04d.png' %
                 (image_dir, epoch), normalize=True)
     else:
         vutils.save_image(
-            fake.data, '%s/lr_fake_samples_epoch_%03d.png' %
+            fake.data, '%s/lr_fake_samples_epoch_%04d.png' %
             (image_dir, epoch), normalize=True)
 
 def save_gif(name, frames):

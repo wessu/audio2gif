@@ -211,44 +211,63 @@ class TextDataset(data.Dataset):
 class AudioSet(Dataset):
     def __init__(self, root_dir, frame_hop_size=2, n_frames=5, stage=1):
         self.root_dir = root_dir
-        self.fn_list = list(filter(lambda k: '.npz' in k, os.listdir(self.root_dir)))
+        self.fn_list = list(filter(lambda k: '.npy' in k, os.listdir(self.root_dir)))
         self.frame_hop_size = frame_hop_size
         self.n_frames = n_frames
         self.stage = stage
-
-    def __len__(self):
-        return len(self.fn_list)
-
-    def __getitem__(self, idx):
-        fp = os.path.join(self.root_dir, self.fn_list[idx])
-        sample = dict(np.load(fp))
         if self.stage == 1:
-            sample['video'] = self.select_image(sample['video'])
+            self.ft_type = 'image'
         elif self.stage == 2:
-            sample['video'] = self.select_frames(sample['video'])
-        elif self.stage == 0: # Train embedding net. Return audio features only.
-            # sample.pop('video', None)
-            pass
+            self.ft_type = 'video'
         else:
             raise Exception('Stage should be either 1 or 2. Not {}.'.format(self.stage))
 
-        return sample
+        self.samples = []
+        for fn in self.fn_list:
+            fp = os.path.join(self.root_dir, fn)
+            self.samples += np.load(fp).tolist()
 
-    def select_frames(self, video):
-        last_start = video.shape[0] - self.frame_hop_size * self.n_frames
-        idx = np.random.randint(0, last_start)
-        gif = video[idx:idx+self.frame_hop_size*self.n_frames:self.frame_hop_size]
-        return gif
 
-    def select_image(self, video):
-        last_start = video.shape[0] - self.frame_hop_size * self.n_frames
-        # idx = np.random.randint(0, last_start)
-        idx = 10
-        img = video[idx].transpose((1, 2, 0))
-        img = Image.fromarray(img, 'RGB')
-        img = img.resize((64, 64), Image.BILINEAR)
-        img = np.array(img.convert('RGB')).transpose((2, 1, 0)) # size, size , 3
-        return img
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        # fp = os.path.join(self.root_dir, self.fn_list[idx])
+        # sample = dict(np.load(fp))
+        n_samps = self.samples[idx][self.ft_type].shape[0]
+        k = np.random.randint(0, n_samps)
+        return (self.samples[idx]['audio'], self.samples[idx][self.ft_type][k])
+
+    # def load_wrap(self, fn):
+    #     fp = os.path.join(self.root_dir, fn)
+    #     samples = np.load(fp)
+    #     for sample in samples:
+    #         if self.stage == 1:
+    #             sample['video'] = self.select_image(sample['video'])
+    #         elif self.stage == 2:
+    #             sample['video'] = self.select_frames(sample['video'])
+    #         elif self.stage == 0: # Train embedding net. Return audio features only.
+    #             # sample.pop('video', None)
+    #             pass
+    #         else:
+    #             raise Exception('Stage should be either 1 or 2. Not {}.'.format(self.stage))
+    #     return samples
+
+    # def select_frames(self, video):
+    #     last_start = video.shape[0] - self.frame_hop_size * self.n_frames
+    #     idx = np.random.randint(0, last_start)
+    #     gif = video[idx:idx+self.frame_hop_size*self.n_frames:self.frame_hop_size]
+    #     return gif
+
+    # def select_image(self, video):
+    #     last_start = video.shape[0] - self.frame_hop_size * self.n_frames
+    #     idx = np.random.randint(0, last_start)
+    #     # idx = 10
+    #     img = video[idx].transpose((1, 2, 0))
+    #     img = Image.fromarray(img, 'RGB')
+    #     img = img.resize((64, 64), Image.BILINEAR)
+    #     img = np.array(img.convert('RGB')).transpose((2, 1, 0)) # size, size , 3
+    #     return img
 
 class AudioSet2(Dataset):
     def __init__(self, samples_npy):

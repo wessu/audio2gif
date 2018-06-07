@@ -184,12 +184,23 @@ class GANTrainer(object):
                 ######################################################
                 if cfg.DATASET_NAME == 'audioset':
                     if cfg.CUDA:
-                        audio_feat = data['audio'].to(device=torch.device('cuda'), dtype=torch.float)
-                        real_imgs = data['video'].to(device=torch.device('cuda'), dtype=torch.float)
+                        audio_feat = data[0].to(device=torch.device('cuda'), dtype=torch.float)
+                        real_imgs = data[1].to(device=torch.device('cuda'), dtype=torch.float)
                     else:
-                        audio_feat = data['audio'].type(torch.FloatTensor)
-                        real_imgs = data['video'].type(torch.FloatTensor)
-                    embedding = netE(audio_feat) #
+                        audio_feat = data[0].type(torch.FloatTensor)
+                        real_imgs = data[1].type(torch.FloatTensor)
+                    # embedding = netE(audio_feat)
+                    with torch.no_grad():
+                        m = list(netE._modules.values())[0]
+                        ft = audio_feat
+                        ftlist = []
+                        for j, module in enumerate(m):
+                            nft = module(ft)
+                            ftlist.append(nft)
+                            ft = nft
+                        embedding = ftlist[-2]
+                    #     ee = torch.sum((embedding > 0).to(device=torch.device('cuda'), dtype=torch.float)*embedding)
+                    #     print(ee, torch.sum(embedding))
                 else:
                     real_img_cpu, embedding = data
                     real_img_cpu = real_img_cpu.type(torch.FloatTensor)
@@ -234,7 +245,7 @@ class GANTrainer(object):
 
                 count = count + 1
                 # if i % 50 == 0:
-                if epoch % 100 == 0:
+                if (epoch+1) % 100 == 0:
                     # summary_D = tf.summary.scalar('D_loss', errD.data[0])
                     # summary_D_r = tf.summary.scalar('D_loss_real', errD_real)
                     # summary_D_w = tf.summary.scalar('D_loss_wrong', errD_wrong)
@@ -264,7 +275,7 @@ class GANTrainer(object):
                      Loss_real: %.4f Loss_wrong:%.4f Loss_fake %.4f
                      Total Time: %.2fsec
                   '''
-                  % (epoch, self.max_epoch, i, len(data_loader),
+                  % (epoch+1, self.max_epoch, i, len(data_loader),
                      errD.data[0], errG.data[0], kl_loss.data[0],
                      errD_real, errD_wrong, errD_fake, (end_t - start_t)))
             if epoch % self.snapshot_interval == 0:
