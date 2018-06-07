@@ -178,8 +178,8 @@ class GANTrainer(object):
                                 betas=(cfg.TRAIN.ADAM_BETA1, cfg.TRAIN.ADAM_BETA2))
         count = 0
         # fix data to overfit
-        #for data in data_loader:
-        #    break
+        for data in data_loader:
+            break
         for epoch in range(self.max_epoch):
             start_t = time.time()
             print("running epoch {}".format(epoch))
@@ -192,20 +192,31 @@ class GANTrainer(object):
                     param_group['lr'] = discriminator_lr
 
 
-            # reuse data everytime
-            #for i in range(100):
-            for i, data in enumerate(data_loader, 0):
+            # reuse data ev5rytime
+            for i in range(500):
+            #for i, data in enumerate(data_loader):
                 ######################################################
                 # (1) Prepare training data
                 ######################################################
                 if cfg.DATASET_NAME == 'audioset':
                     if cfg.CUDA:
-                        audio_feat = data['audio'].to(device=torch.device('cuda'), dtype=torch.float)
-                        real_imgs = data['video'].to(device=torch.device('cuda'), dtype=torch.float)
+                        audio_feat = data[0].to(device=torch.device('cuda'), dtype=torch.float)
+                        real_imgs = data[1].to(device=torch.device('cuda'), dtype=torch.float)
                     else:
-                        audio_feat = data['audio'].type(torch.FloatTensor)
-                        real_imgs = data['video'].type(torch.FloatTensor)
-                    embedding = netE(audio_feat) #
+                        audio_feat = data[0].type(torch.FloatTensor)
+                        real_imgs = data[1].type(torch.FloatTensor)
+                    # embedding = netE(audio_feat)
+                    with torch.no_grad():
+                        m = list(netE._modules.values())[0]
+                        ft = audio_feat
+                        ftlist = []
+                        for j, module in enumerate(m):
+                            nft = module(ft)
+                            ftlist.append(nft)
+                            ft = nft
+                        embedding = ftlist[-2]
+                    #     ee = torch.sum((embedding > 0).to(device=torch.device('cuda'), dtype=torch.float)*embedding)
+                    #     print(ee, torch.sum(embedding))
                 else:
                     real_img_cpu, embedding = data
                     real_img_cpu = real_img_cpu.type(torch.FloatTensor)
@@ -215,13 +226,15 @@ class GANTrainer(object):
                 if cfg.CUDA:
                     real_imgs = real_imgs.cuda()
                     embedding = embedding.cuda()
-
+                embedding_mean = embedding.mean(dim=1, keepdim=True)
+                embedding_std = embedding.std(dim=1, keepdim=True)
+                embedding = (embedding - embedding_mean)
                 #######################################################
                 # (2) Generate fake images
                 ######################################################
                 noise.data.normal_(0, 1)
                 inputs = (embedding, noise)
-                #inputs = embedding, fixed_noise_test
+                #inputs = embedding, fixed_noise
                 if cfg.CPU:
                     _, fake_imgs, mu, logvar = netG(*inputs)
                 else:
@@ -237,6 +250,10 @@ class GANTrainer(object):
                     errD, wasserstein_d, gp = compute_discriminator_wgan_loss(netD, real_imgs, fake_imgs, self.gpus, mu, cfg.WGAN.LAMBDA)
                     errD.backward()
                     skip_generator_update = (wgan_d_count % cfg.WGAN.N_D != 0)
+                    for param in netD.parameters():
+                        if param.requires_grad:
+                            #print(param.grad)   
+                           pass
                 else:
                     errD, errD_real, errD_wrong, errD_fake = \
                         compute_discriminator_loss(netD, real_imgs, fake_imgs,
@@ -255,10 +272,10 @@ class GANTrainer(object):
                                                             mu, self.gpus)
                         errG.backward(mone)
                         errG = -errG
-                        print("iteration {}, LossG = {}".format(errG))
-                        #for param in netD.parameters():
-                            #if param.requires_grad:
-                                # print(param.grad)   
+                        for param in netG.parameters():
+                            if param.requires_grad:
+                                pass
+                #print(param.grad)   
                     else:
                         errG = compute_generator_loss(netD, fake_imgs,
                                                       real_labels, mu, self.gpus)
@@ -267,16 +284,16 @@ class GANTrainer(object):
                         errG_total.backward()
                     optimizerG.step()
                 count = count + 1
-
+                # if i % 50 == 0:
                 ###########################
                 # output progress
                 ###########################
 
-                if i % 100 == 0:
+                if count % 100 == 0:
                     if cfg.TRAIN.USE_WGAN:
                         self.summary_writer.add_scalar('GP', gp, count)
                         self.summary_writer.add_scalar('D_Loss', errD, count)
-                        if i == 0:
+                        if count < 5:
                             errG = 0
                         self.summary_writer.add_scalar('G_loss', errG, count)
                         self.summary_writer.add_scalar('W_Loss', wasserstein_d,count)
@@ -300,6 +317,7 @@ class GANTrainer(object):
                     if lr_fake is not None:
                         save_img_results(None, lr_fake, epoch, self.image_dir)
             end_t = time.time()
+<<<<<<< HEAD
             if cfg.TRAIN.USE_WGAN:
                 print('''[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f
                          wassterain_loss: %.4f
@@ -316,6 +334,15 @@ class GANTrainer(object):
                       % (epoch, self.max_epoch, i, len(data_loader),
                          errD.data[0], errG.data[0], kl_loss.data[0],
                          errD_real, errD_wrong, errD_fake, (end_t - start_t)))
+=======
+            print('''[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f Loss_KL: %.4f
+                     Loss_real: %.4f Loss_wrong:%.4f Loss_fake %.4f
+                     Total Time: %.2fsec
+                  '''
+                  % (epoch+1, self.max_epoch, i, len(data_loader),
+                     errD.data[0], errG.data[0], kl_loss.data[0],
+                     errD_real, errD_wrong, errD_fake, (end_t - start_t)))
+>>>>>>> master
             if epoch % self.snapshot_interval == 0:
                 save_model(netG, netD, epoch, self.model_dir)
         #

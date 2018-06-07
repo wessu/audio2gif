@@ -205,6 +205,9 @@ class CA_NET(nn.Module):
     def __init__(self):
         super(CA_NET, self).__init__()
         self.t_dim = cfg.AUDIO.DIMENSION
+        # self.t_dim = cfg.TEXT.DIMENSION
+        # self.t_dim = cfg.AUDIO.DIMENSION
+        self.t_dim = 1024
         self.c_dim = cfg.GAN.CONDITION_DIM
         self.fc = nn.Linear(self.t_dim, self.c_dim * 2, bias=True)
         self.relu = nn.ReLU()
@@ -329,12 +332,12 @@ class STAGE1_D(nn.Module):
             # state size (ndf*2) x 16 x 16
             nn.Conv2d(ndf*2, ndf * 4, 4, 2, 1, bias=False),
             #nn.BatchNorm2d(ndf * 4),
-	        nn.LayerNorm([ndf*4, 8, 8]),
+	    nn.LayerNorm([ndf*4, 8, 8]),
             nn.LeakyReLU(0.2, inplace=True),
             # state size (ndf*4) x 8 x 8
             nn.Conv2d(ndf*4, ndf * 8, 4, 2, 1, bias=False),
             #nn.BatchNorm2d(ndf * 8),
-	        nn.LayerNorm([ndf*8, 4, 4]),
+	    nn.LayerNorm([ndf*8, 4, 4]),
             # state size (ndf * 8) x 4 x 4)
             nn.LeakyReLU(0.2, inplace=True),
         )
