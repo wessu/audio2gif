@@ -6,16 +6,18 @@ GPU_ID: '0,1'
 CUDA: True
 CPU: False
 Z_DIM: 100
+# DATA_DIR: '../data/audioset/train/feature/melspec'
 DATA_DIR: '../data/demo/feature/melspec'
 IMSIZE: 240 # resize to (not crop)
-WORKERS: 1
+WORKERS: 3
 STAGE: 1
 # STAGE1_G: '../output/gif_stageI_2018_05_24_15_46_50/Model/netG_epoch_25.pth'
+EMB_NET: '../output/chosen/audioset_embnet/embnet_3.pth'
 TRAIN:
     FLAG: True
-    BATCH_SIZE: 10
+    BATCH_SIZE: 11
     MAX_EPOCH: 100
-    LR_DECAY_EPOCH: 20
+    LR_DECAY_EPOCH: 5
     SNAPSHOT_INTERVAL: 10
     DISCRIMINATOR_LR: 0.0002
     GENERATOR_LR: 0.0002

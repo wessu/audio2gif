@@ -87,7 +87,7 @@ class TextDataset(data.Dataset):
         split_dir = os.path.join(data_dir, split)
 
         #self.filenames = self.load_filenames(split_dir)
-        filenames = os.listdir(os.path.join(data_dir, "images"))
+        filenames = os.listdir(os.path.join(data_dir, "images"))[:16]
         self.filenames = [f.strip(".jpg") for f in filenames]
         print(self.filenames[0])
         self.embeddings = self.load_embedding(split_dir, embedding_type)
@@ -292,7 +292,7 @@ class AudioSetAudio(Dataset):
             self.samples = pool.map(self.load, self.fn_list)
             q.put('kill')
             pool.close()
-        print('Take {} mins to load data'.format((time.time()-st)/60.0))
+        print('Took %.4f mins to load data' % ((time.time()-st)/60.0))
 
     def __len__(self):
         return len(self.samples)

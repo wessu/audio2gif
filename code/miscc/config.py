@@ -21,6 +21,7 @@ __C.CPU = False
 __C.NET_G = ''
 __C.NET_D = ''
 __C.STAGE1_G = ''
+__C.EMB_NET = ''
 __C.DATA_DIR = ''
 __C.EVAL_DATA_DIR = ''
 __C.VIS_COUNT = 64

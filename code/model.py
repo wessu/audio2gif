@@ -15,7 +15,7 @@ def conv3_1dxn(in_planes, out_planes, n_layers, stride=1, padding=False):
         conv3_1d(in_plane, out_planes, stride, padding),
         nn.BatchNorm1d(out_planes),
         nn.LeakyReLU(0.2, inplace=True)
-        ) for in_plane in in_planes]
+        ) for in_plane in in_planes] + [nn.Sequential(nn.Dropout(p=0.4))]
     return nn.Sequential(*seqs)
 
 def conv3x3_2d(in_planes, out_planes, stride=1):
@@ -51,6 +51,44 @@ class Squeeze(nn.Module):
     def forward(self, x):
         return torch.squeeze(x)  # "flatten" the C * H * W values into a single vector per image
 
+class ResBlock1d(nn.Module):
+    def __init__(self, in_dim, feat_dim, stride=2, dropout=0.4):
+        super(ResBlock1d, self).__init__()
+        self.in_dim = in_dim
+        self.feat_dim = feat_dim
+        self.stride = stride
+        self.dropout = dropout
+        self.define_module()
+
+    def define_module(self):
+        self.cell = nn.Sequential(
+            # nn.Conv1d(in_dim, feat_dim, kernel_size=1, stride=1),
+            # nn.BatchNorm1d(feat_dim),
+            # nn.ReLU(True),
+            conv3_1d(self.in_dim, self.feat_dim, stride=self.stride, padding=True),
+            nn.BatchNorm1d(self.feat_dim),
+            nn.ReLU(True),
+            conv3_1d(self.feat_dim, self.feat_dim, stride=1, padding=True),
+            nn.BatchNorm1d(self.feat_dim),
+            # nn.ReLU(True),
+            # nn.Conv1d(feat_dim, in_dim, kernel_size=1, stride=1),
+            # nn.BatchNorm1d(feat_dim),
+            )
+        self.residual = nn.Sequential(
+            nn.Conv1d(self.in_dim, self.feat_dim, kernel_size=1, stride=1),
+            nn.BatchNorm1d(self.feat_dim),
+            nn.AvgPool1d(self.stride),
+            )
+
+    def forward(self, x):
+        if (self.in_dim == self.feat_dim) and (self.stride == 1):
+            out = torch.nn.functional.relu((self.cell(x) + x), True)
+        else:
+            out = torch.nn.functional.relu((self.cell(x) + self.residual(x)), True)
+        if self.dropout > 0:
+            out = torch.nn.functional.dropout(out, p=self.dropout)
+        return out
+
 class EmbeddingNet(nn.Module):
     def __init__(self, feat_dim, out_dim):
         super(EmbeddingNet, self).__init__()
@@ -60,16 +98,34 @@ class EmbeddingNet(nn.Module):
         
     def define_module(self):
         self.embedding_net_1 = nn.Sequential(
-            conv3_1dxn(self.feat_dim, 256, 5),
-            nn.MaxPool1d(2),
-            conv3_1dxn(256, 512, 5),
-            nn.MaxPool1d(2),
-            conv3_1d(512, 1024, stride=2, padding=True),
-            conv3_1d(1024, 1024, stride=2, padding=True), # 25
-            conv3_1d(1024, 2048, stride=2, padding=False), # 12
-            nn.MaxPool1d(12),
+            conv3_1dxn(self.feat_dim, 256, 5), # 420
+            nn.MaxPool1d(2), # 210
+            conv3_1dxn(256, 512, 5), # 200
+            nn.MaxPool1d(2), # 100
+            # conv3_1d(512, 1024, stride=2, padding=True), # 50
+            # nn.BatchNorm1d(1024),
+            # nn.ReLU(True),
+            # nn.Dropout(p=0.4),
+            # conv3_1d(1024, 1024, stride=2, padding=True), # 25
+            # nn.BatchNorm1d(1024),
+            # nn.ReLU(True),
+            # nn.Dropout(p=0.4),
+            ResBlock1d(512, 512, 1), # 100
+            nn.MaxPool1d(2), # 50
+            ResBlock1d(512, 512, 1), # 50
+            nn.MaxPool1d(2), # 25
+            ResBlock1d(512, 1024, 1), # 25
+            nn.MaxPool1d(2), # 12
+            ResBlock1d(1024, 1024), # 12
+            nn.MaxPool1d(6), # 2
+            # ResBlock1d(1024, 1024), # 3
+            # ResBlock1d(1024, 1024, 3), # 1
+            # conv3_1d(1024, 1024, stride=1, padding=True), # 12
+            # nn.BatchNorm1d(1024),
+            # nn.ReLU(True),
+            # nn.MaxPool1d(12),
             Squeeze(), # shape (N, 2048)
-            nn.Linear(2048, self.out_dim)
+            nn.Linear(1024, self.out_dim)
             )
         # self.lstm = nn.LSTM(1024, 1024)
         # self.embedding_net_2 = nn.Sequential(
@@ -108,13 +164,18 @@ class EmbeddingNetLSTM(nn.Module):
             conv3_1dxn(256, 512, 5),
             nn.MaxPool1d(2),
             conv3_1d(512, 1024, stride=2, padding=True),
-            conv3_1d(1024, 1024, stride=2, padding=True) # 25
+            nn.BatchNorm1d(1024),
+            nn.ReLU(True),
+            conv3_1d(1024, 1024, stride=2, padding=True), # 25
+            nn.BatchNorm1d(1024),
+            nn.ReLU(True),
+            nn.Dropout(p=0.4),
             )
         self.lstm = nn.LSTM(1024, 512)
         self.embedding_net_2 = nn.Sequential(
             nn.MaxPool1d(5),
             Flatten(), # (N, 1024 * 5)
-            nn.Linear(512 * 5, self.out_dim)
+            nn.Linear(512 * 5, self.out_dim),
             )
 
         # self.e3 = nn.Sequential(
@@ -143,7 +204,8 @@ class CA_NET(nn.Module):
     # (https://github.com/pytorch/examples/blob/master/vae/main.py)
     def __init__(self):
         super(CA_NET, self).__init__()
-        self.t_dim = cfg.AUDIO.DIMENSION
+        self.t_dim = cfg.TEXT.DIMENSION
+        # self.t_dim = cfg.AUDIO.DIMENSION
         self.c_dim = cfg.GAN.CONDITION_DIM
         self.fc = nn.Linear(self.t_dim, self.c_dim * 2, bias=True)
         self.relu = nn.ReLU()

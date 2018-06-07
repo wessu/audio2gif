@@ -12,6 +12,7 @@ import time
 
 import numpy as np
 import torchfile
+from sklearn.metrics import confusion_matrix
 
 from miscc.config import cfg
 from miscc.utils import mkdir_p
@@ -55,6 +56,13 @@ class GANTrainer(object):
         from model import EmbeddingNet
         netE = EmbeddingNet(cfg.AUDIO.FEATURE_DIM, cfg.AUDIO.DIMENSION)
         netE.apply(weights_init)
+        if cfg.EMB_NET != '':
+            state_dict = torch.load(cfg.EMB_NET,
+                                    map_location=lambda storage, loc: storage)
+            netE.load_state_dict(state_dict)
+            for p in netE.parameters():
+                p.requires_grad=False
+            print('Load from: ', cfg.EMB_NET)
         if cfg.CUDA:
             netE.cuda()
         return netE
@@ -196,7 +204,7 @@ class GANTrainer(object):
                 # (2) Generate fake images
                 ######################################################
                 noise.data.normal_(0, 1)
-                inputs = (embedding, noise)
+                inputs = (embedding, fixed_noise)
                 if cfg.CPU:
                     _, fake_imgs, mu, logvar = netG(*inputs)
                 else:
@@ -225,7 +233,8 @@ class GANTrainer(object):
                 optimizerG.step()
 
                 count = count + 1
-                if i % 50 == 0:
+                # if i % 50 == 0:
+                if epoch % 100 == 0:
                     # summary_D = tf.summary.scalar('D_loss', errD.data[0])
                     # summary_D_r = tf.summary.scalar('D_loss_real', errD_real)
                     # summary_D_w = tf.summary.scalar('D_loss_wrong', errD_wrong)
@@ -334,7 +343,7 @@ class EmbeddingNetTrainer(object):
         self.epochs = cfg.TRAIN.MAX_EPOCH
         self.n_workers = int(cfg.WORKERS)
         self.batch_size = cfg.TRAIN.BATCH_SIZE
-        self.learning_rate = 1e-4
+        self.learning_rate = 8e-4
         self.num_classes = cfg.NUM_CLASSES
         if model is not None:
             self.model = model
@@ -345,8 +354,10 @@ class EmbeddingNetTrainer(object):
 
     def build_model(self):
         from model import EmbeddingNet
-        self.model = nn.Sequential( EmbeddingNet(self.feature_dim, self.output_dim),
-                                    nn.Linear(self.output_dim, self.num_classes)
+        self.embnet = EmbeddingNet(self.feature_dim, self.output_dim)
+        self.model = nn.Sequential( self.embnet,
+                                    nn.ReLU(),
+                                    nn.Linear(self.output_dim, self.num_classes),
                                     )
     def train(self, train_set, eval_set=None):
         dataloader = torch.utils.data.DataLoader(
@@ -356,6 +367,7 @@ class EmbeddingNetTrainer(object):
         best_eval_acc = -1.0
         for e in range(self.epochs):
             print('Epoch %d / %d' % (e, self.epochs))
+            st = time.time()
             # Train
             num_correct = 0
             num_samples = 0
@@ -383,7 +395,7 @@ class EmbeddingNetTrainer(object):
                     print('Epoch %d, Iteration %d, loss = %.4f' % (e, i, loss.item()))
 
             acc = float(num_correct) / num_samples if num_samples > 0 else 0.0
-            print('Epoch %d' % (e))
+            print('Epoch %d took %.2f mins' % (e, (time.time()-st)/60.0))
             print('Train: Got %d / %d correct (%.2f)' % (num_correct, num_samples, 100 * acc))
 
             # Evaluate
@@ -392,7 +404,7 @@ class EmbeddingNetTrainer(object):
                 if acc >= best_eval_acc and self.output_dir is not None:
                     save_dir = os.path.join(self.output_dir, 'embnet')
                     mkdir_p(save_dir)
-                    torch.save( self.model.state_dict(), 
+                    torch.save( self.embnet.state_dict(), 
                                 os.path.join(save_dir, 'embnet.pth')
                                 )
                     print('Save Embedding Net model')
@@ -426,5 +438,29 @@ class EmbeddingNetLSTMTrainer(EmbeddingNetTrainer):
     def build_model(self):
         from model import EmbeddingNetLSTM
         self.model = nn.Sequential( EmbeddingNetLSTM(self.feature_dim, self.output_dim),
-                                    nn.Linear(self.output_dim, self.num_classes)
+                                    nn.ReLU(),
+                                    nn.Linear(self.output_dim, self.num_classes),
                                     )
+
+def print_cm(cm, labels, hide_zeroes=False, hide_diagonal=False, hide_threshold=None):
+    """pretty print for confusion matrixes"""
+    columnwidth = max([len(x) for x in labels] + [5])  # 5 is value length
+    empty_cell = " " * columnwidth
+    # Print header
+    print("    " + empty_cell, end=" ")
+    for label in labels:
+        print("%{0}s".format(columnwidth) % label, end=" ")
+    print()
+    # Print rows
+    for i, label1 in enumerate(labels):
+        print("    %{0}s".format(columnwidth) % label1, end=" ")
+        for j in range(len(labels)):
+            cell = "%{0}.1f".format(columnwidth) % cm[i, j]
+            if hide_zeroes:
+                cell = cell if float(cm[i, j]) != 0 else empty_cell
+            if hide_diagonal:
+                cell = cell if i != j else empty_cell
+            if hide_threshold:
+                cell = cell if cm[i, j] > hide_threshold else empty_cell
+            print(cell, end=" ")
+        print()
