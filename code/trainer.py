@@ -25,7 +25,9 @@ from miscc.utils import compute_discriminator_wgan_loss, compute_generator_wgan_
 #from tensorboard import summary
 # from tensorflow.summary import FileWriter
 
-from torchsummary import summary
+
+from tensorboardX import SummaryWriter
+
 
 class GANTrainer(object):
     def __init__(self, output_dir):
@@ -36,7 +38,7 @@ class GANTrainer(object):
             mkdir_p(self.model_dir)
             mkdir_p(self.image_dir)
             mkdir_p(self.log_dir)
-            self.summary_writer = tf.summary.FileWriter(self.log_dir)
+            self.summary_writer = SummaryWriter(self.log_dir)
 
         self.max_epoch = cfg.TRAIN.MAX_EPOCH
         self.snapshot_interval = cfg.TRAIN.SNAPSHOT_INTERVAL
@@ -153,21 +155,31 @@ class GANTrainer(object):
         if cfg.CUDA:
             noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
             real_labels, fake_labels = real_labels.cuda(), fake_labels.cuda()
+            #fixed_noise_test = fixed_noise_test.cuda()
+        one = torch.FloatTensor([1])
+        mone = one * -1
+
+        if cfg.CUDA:
+            one = one.cuda()
+            mone = mone.cuda()
 
         generator_lr = cfg.TRAIN.GENERATOR_LR
         discriminator_lr = cfg.TRAIN.DISCRIMINATOR_LR
         lr_decay_step = cfg.TRAIN.LR_DECAY_EPOCH
         optimizerD = \
             optim.Adam(netD.parameters(),
-                       lr=cfg.TRAIN.DISCRIMINATOR_LR, betas=(0.5, 0.999))
+                       lr=cfg.TRAIN.DISCRIMINATOR_LR, betas=(cfg.TRAIN.ADAM_BETA1, cfg.TRAIN.ADAM_BETA2))
         netG_para = []
         for p in netG.parameters():
             if p.requires_grad:
                 netG_para.append(p)
         optimizerG = optim.Adam(netG_para,
                                 lr=cfg.TRAIN.GENERATOR_LR,
-                                betas=(0.5, 0.999))
+                                betas=(cfg.TRAIN.ADAM_BETA1, cfg.TRAIN.ADAM_BETA2))
         count = 0
+        # fix data to overfit
+        #for data in data_loader:
+        #    break
         for epoch in range(self.max_epoch):
             start_t = time.time()
             print("running epoch {}".format(epoch))
@@ -179,6 +191,9 @@ class GANTrainer(object):
                 for param_group in optimizerD.param_groups:
                     param_group['lr'] = discriminator_lr
 
+
+            # reuse data everytime
+            #for i in range(100):
             for i, data in enumerate(data_loader, 0):
                 ######################################################
                 # (1) Prepare training data
@@ -205,7 +220,8 @@ class GANTrainer(object):
                 # (2) Generate fake images
                 ######################################################
                 noise.data.normal_(0, 1)
-                inputs = (embedding, fixed_noise)
+                inputs = (embedding, noise)
+                #inputs = embedding, fixed_noise_test
                 if cfg.CPU:
                     _, fake_imgs, mu, logvar = netG(*inputs)
                 else:
@@ -218,10 +234,7 @@ class GANTrainer(object):
                 netD.zero_grad()
                 if cfg.TRAIN.USE_WGAN:
                     wgan_d_count += 1
-                    print("wgan updating D")
-
-
-                    errD, wasserstein_d = compute_discriminator_wgan_loss(netD, real_imgs, fake_imgs, self.gpus, mu, cfg.WGAN.LAMBDA)
+                    errD, wasserstein_d, gp = compute_discriminator_wgan_loss(netD, real_imgs, fake_imgs, self.gpus, mu, cfg.WGAN.LAMBDA)
                     errD.backward()
                     skip_generator_update = (wgan_d_count % cfg.WGAN.N_D != 0)
                 else:
@@ -238,10 +251,14 @@ class GANTrainer(object):
                 if not skip_generator_update:
                     netG.zero_grad()
                     if cfg.TRAIN.USE_WGAN:
-                        print("wgan updating G")
+                        print("Here")
                         errG = compute_generator_wgan_loss(netD, fake_imgs,
                                                             mu, self.gpus)
-                        errG.backward()
+                        errG.backward(mone)
+                        errG = -errG
+                        #for param in netD.parameters():
+                            #if param.requires_grad:
+                                # print(param.grad)   
                     else:
                         errG = compute_generator_loss(netD, fake_imgs,
                                                       real_labels, mu, self.gpus)
@@ -256,22 +273,24 @@ class GANTrainer(object):
                 ###########################
 
                 if i % 100 == 0:
-                    # summary_D = tf.summary.scalar('D_loss', errD.data[0])
-                    # summary_D_r = tf.summary.scalar('D_loss_real', errD_real)
-                    # summary_D_w = tf.summary.scalar('D_loss_wrong', errD_wrong)
-                    # summary_D_f = tf.summary.scalar('D_loss_fake', errD_fake)
-                    # summary_G = tf.summary.scalar('G_loss', errG.data[0])
-                    # summary_KL = tf.summary.scalar('KL_loss', kl_loss.data[0])
-                    #
-                    # self.summary_writer.add_summary(summary_D, count)
-                    # self.summary_writer.add_summary(summary_D_r, count)
-                    # self.summary_writer.add_summary(summary_D_w, count)
-                    # self.summary_writer.add_summary(summary_D_f, count)
-                    # self.summary_writer.add_summary(summary_G, count)
-                    # self.summary_writer.add_summary(summary_KL, count)
-
+                    if cfg.TRAIN.USE_WGAN:
+                        self.summary_writer.add_scalar('GP', gp, count)
+                        self.summary_writer.add_scalar('D_Loss', errD, count)
+                        if i == 0:
+                            errG = 0
+                        self.summary_writer.add_scalar('G_loss', errG, count)
+                        self.summary_writer.add_scalar('W_Loss', wasserstein_d,count)
+                    else:
+                        self.summary_writer.add_scalar('D_loss', errD.data[0],count)
+                        self.summary_writer.add_scalar('D_loss_real', errD_real,count)
+                        self.summary_writer.add_scalar('D_loss_real', errD_real,count)
+                        self.summary_writer.add_scalar('D_loss_wrong', errD_wrong,count)
+                        self.summary_writer.add_scalar('D_loss_fake', errD_fake,count)
+                        self.summary_writer.add_scalar('G_loss', errG.data[0],count)
+                        self.summary_writer.add_scalar('KL_loss', kl_loss.data[0],count)
                     # save the image result for each epoch
                     inputs = (embedding, fixed_noise)
+                    #inputs = (embedding, fixed_noise_test)
                     if cfg.CPU:
                         lr_fake, fake, _, _ = netG(*inputs)
                     else:
@@ -434,7 +453,7 @@ class EmbeddingNetTrainer(object):
                 if acc >= best_eval_acc and self.output_dir is not None:
                     save_dir = os.path.join(self.output_dir, 'embnet')
                     mkdir_p(save_dir)
-                    torch.save( self.embnet.state_dict(), 
+                    torch.save( self.embnet.state_dict(),
                                 os.path.join(save_dir, 'embnet.pth')
                                 )
                     print('Save Embedding Net model')

@@ -204,8 +204,7 @@ class CA_NET(nn.Module):
     # (https://github.com/pytorch/examples/blob/master/vae/main.py)
     def __init__(self):
         super(CA_NET, self).__init__()
-        self.t_dim = cfg.TEXT.DIMENSION
-        # self.t_dim = cfg.AUDIO.DIMENSION
+        self.t_dim = cfg.AUDIO.DIMENSION
         self.c_dim = cfg.GAN.CONDITION_DIM
         self.fc = nn.Linear(self.t_dim, self.c_dim * 2, bias=True)
         self.relu = nn.ReLU()
@@ -240,14 +239,15 @@ class D_GET_LOGITS(nn.Module):
         if bcondition:
             self.outlogits = nn.Sequential(
                 conv3x3_2d(ndf * 8 + nef, ndf * 8),
-                nn.BatchNorm2d(ndf * 8),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4),
-                nn.Sigmoid())
+                #nn.BatchNorm2d(ndf * 8),
+                nn.LayerNorm([ndf*8, 4, 4]),
+		        nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4))
+                # nn.Sigmoid())
         else:
             self.outlogits = nn.Sequential(
-                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4),
-                nn.Sigmoid())
+                nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4))
+               # nn.Sigmoid())
 
     def forward(self, h_code, c_code=None):
         # conditioning output
@@ -255,8 +255,6 @@ class D_GET_LOGITS(nn.Module):
             c_code = c_code.view(-1, self.ef_dim, 1, 1)
             c_code = c_code.repeat(1, 1, 4, 4)
             # state size (ngf+egf) x 4 x 4
-            print("c_code shape {}".format(c_code.shape))
-            print("h_code shape {}".format(h_code.shape))
             h_c_code = torch.cat((h_code, c_code), 1)
         else:
             h_c_code = h_code
@@ -325,15 +323,18 @@ class STAGE1_D(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf) x 32 x 32
             nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 2),
+            nn.LayerNorm([ndf*2, 16, 16]),
+	        #nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace=True),
             # state size (ndf*2) x 16 x 16
             nn.Conv2d(ndf*2, ndf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 4),
+            #nn.BatchNorm2d(ndf * 4),
+	        nn.LayerNorm([ndf*4, 8, 8]),
             nn.LeakyReLU(0.2, inplace=True),
             # state size (ndf*4) x 8 x 8
             nn.Conv2d(ndf*4, ndf * 8, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 8),
+            #nn.BatchNorm2d(ndf * 8),
+	        nn.LayerNorm([ndf*8, 4, 4]),
             # state size (ndf * 8) x 4 x 4)
             nn.LeakyReLU(0.2, inplace=True),
         )
