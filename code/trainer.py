@@ -20,8 +20,8 @@ from miscc.utils import save_img_results, save_model
 from miscc.utils import KL_loss
 from miscc.utils import compute_discriminator_loss, compute_generator_loss
 from miscc.utils import compute_discriminator_wgan_loss, compute_generator_wgan_loss
-#from tensorboard import summary
-import tensorflow as tf
+from tensorboardX import SummaryWriter
+#import tensorflow as tf
 #from tensorflow.summary import FileWriter
 
 class GANTrainer(object):
@@ -33,7 +33,7 @@ class GANTrainer(object):
             mkdir_p(self.model_dir)
             mkdir_p(self.image_dir)
             mkdir_p(self.log_dir)
-            self.summary_writer = tf.summary.FileWriter(self.log_dir)
+            self.summary_writer = SummaryWriter(self.log_dir)
 
         self.max_epoch = cfg.TRAIN.MAX_EPOCH
         self.snapshot_interval = cfg.TRAIN.SNAPSHOT_INTERVAL
@@ -142,6 +142,11 @@ class GANTrainer(object):
         if cfg.CUDA:
             noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
             real_labels, fake_labels = real_labels.cuda(), fake_labels.cuda()
+        one = torch.FloatTensor([1])
+        mone = one * -1
+        if cfg.CUDA:
+            one = one.cuda()
+            mone = mone.cuda()
 
         generator_lr = cfg.TRAIN.GENERATOR_LR
         discriminator_lr = cfg.TRAIN.DISCRIMINATOR_LR
@@ -202,9 +207,6 @@ class GANTrainer(object):
                 netD.zero_grad()
                 if cfg.TRAIN.USE_WGAN:
                     wgan_d_count += 1
-                    # print("wgan updating D")
-
-
                     errD, wasserstein_d = compute_discriminator_wgan_loss(netD, real_imgs, fake_imgs, self.gpus, mu, cfg.WGAN.LAMBDA)
                     errD.backward()
                     skip_generator_update = (wgan_d_count % cfg.WGAN.N_D != 0)
@@ -222,10 +224,10 @@ class GANTrainer(object):
                 if not skip_generator_update:
                     netG.zero_grad()
                     if cfg.TRAIN.USE_WGAN:
-                        # print("wgan updating G")
                         errG = compute_generator_wgan_loss(netD, fake_imgs,
                                                             mu, self.gpus)
-                        errG.backward()
+                        errG.backward(mone)
+                        errG = -errG
                     else:
                         errG = compute_generator_loss(netD, fake_imgs,
                                                       real_labels, mu, self.gpus)
@@ -239,20 +241,19 @@ class GANTrainer(object):
                 ###########################
 
                 if i % 100 == 0:
-                    # summary_D = tf.summary.scalar('D_loss', errD.data[0])
-                    # summary_D_r = tf.summary.scalar('D_loss_real', errD_real)
-                    # summary_D_w = tf.summary.scalar('D_loss_wrong', errD_wrong)
-                    # summary_D_f = tf.summary.scalar('D_loss_fake', errD_fake)
-                    # summary_G = tf.summary.scalar('G_loss', errG.data[0])
-                    # summary_KL = tf.summary.scalar('KL_loss', kl_loss.data[0])
-                    #
-                    # self.summary_writer.add_summary(summary_D, count)
-                    # self.summary_writer.add_summary(summary_D_r, count)
-                    # self.summary_writer.add_summary(summary_D_w, count)
-                    # self.summary_writer.add_summary(summary_D_f, count)
-                    # self.summary_writer.add_summary(summary_G, count)
-                    # self.summary_writer.add_summary(summary_KL, count)
-
+                    if cfg.TRAIN.USE_WGAN:
+                        self.summary_writer.add_scalar('D_Loss', errD, count)
+                        if i != 0:
+                            self.summary_writer.add_scalar('G_loss', errG, count)
+                        self.summary_writer.add_scalar('W_Loss', wasserstein_d,count)
+                    else:
+                        self.summary_writer.add_scaler('D_loss', errD.data[0],count)
+                        self.summary_writer.add_scalar('D_loss_real', errD_real,count)
+                        self.summary_writer.add_scalar('D_loss_real', errD_real,count)
+                        self.summary_writer.add_scalar('D_loss_wrong', errD_wrong,count)
+                        self.summary_writer.add_scalar('D_loss_fake', errD_fake,count)
+                        self.summary_writer.add_scalar('G_loss', errG.data[0],count)
+                        self.summary_writer.add_scalar('KL_loss', kl_loss.data[0],count)
                     # save the image result for each epoch
                     inputs = (embedding, fixed_noise)
                     if cfg.CPU:

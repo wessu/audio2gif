@@ -18,7 +18,6 @@ from torch.utils.data import Dataset, DataLoader
 from feature_extractor import extract_features
 
 
-import tensorflow as tf
 from miscc.config import cfg
 
 
