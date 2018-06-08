@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import time
 import multiprocessing as mp
+import torch
 from torch.utils.data import Dataset, DataLoader
 from feature_extractor import extract_features
 
@@ -211,7 +212,9 @@ class TextDataset(data.Dataset):
 class AudioSet(Dataset):
     def __init__(self, root_dir, frame_hop_size=2, n_frames=5, stage=1):
         self.root_dir = root_dir
-        self.fn_list = list(filter(lambda k: '.npy' in k, os.listdir(self.root_dir)))
+        self.fn_list = list(filter(lambda k: '.npy' in k, os.listdir(self.root_dir)))[:25]
+        # self.fn_list = ['wrap_4.npy', 'wrap_7.npy', 'wrap_8.npy', 'wrap_51.npy', 
+                        # 'wrap_15.npy', 'wrap_16.npy', 'wrap_19.npy', 'wrap_32.npy']
         self.frame_hop_size = frame_hop_size
         self.n_frames = n_frames
         self.stage = stage
@@ -223,9 +226,20 @@ class AudioSet(Dataset):
             raise Exception('Stage should be either 1 or 2. Not {}.'.format(self.stage))
 
         self.samples = []
+        n_samples = np.zeros(10)
         for fn in self.fn_list:
-            fp = os.path.join(self.root_dir, fn)
-            self.samples += np.load(fp).tolist()
+            try:
+                print('Loading', fn)
+                fp = os.path.join(self.root_dir, fn)
+                samples = [{self.ft_type: s[self.ft_type], 'audio': s['audio'], 'label': s['label']} for s in np.load(fp).tolist()]
+                for s in samples:
+                    n_samples[s['label']] += 1
+                self.samples += samples
+            except:
+                print('Load {} failed'.format(fn))
+        print('Number of samples in the dataset: ')
+        print(n_samples)
+        np.savetxt('../data/n_training_samples', n_samples)
 
 
     def __len__(self):
@@ -236,7 +250,87 @@ class AudioSet(Dataset):
         # sample = dict(np.load(fp))
         n_samps = self.samples[idx][self.ft_type].shape[0]
         k = np.random.randint(0, n_samps)
-        return (self.samples[idx]['audio'], self.samples[idx][self.ft_type][k])
+        return (self.samples[idx]['audio'], self.samples[idx][self.ft_type][k], self.samples[idx]['label'])
+
+def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
+    inputs = torch.cat(inputs)
+    targets = torch.cat(targets)
+    assert len(inputs) == len(targets)
+    if shuffle:
+        indices = np.arange(len(inputs), dtype=int)
+        np.random.shuffle(indices)
+    for start_idx in range(0, len(inputs), batchsize):
+        if shuffle:
+            excerpt = indices[start_idx:start_idx + batchsize]
+        else:
+            excerpt = slice(start_idx, start_idx + batchsize)
+        yield inputs[excerpt], targets[excerpt]
+
+class AudioSetImage(Dataset):
+    def __init__(self, root_dir):
+        self.root_dir = root_dir
+        self.fn_list = list(filter(lambda k: '.npy' in k, os.listdir(self.root_dir)))
+        self.ft_type = 'image'
+        self.samples = []
+        self.current_i = 0
+        # for fn in self.fn_list:
+        #     try:
+        #         fp = os.path.join(self.root_dir, fn)
+        #         samples = np.load(fp).tolist()
+        #         for s in samples:
+        #             s.pop('video')
+        #         self.samples += 
+        #         print('{} Loaded'.format(fn))
+        #     except:
+        #         print('Load {} failed'.format(fn))
+        for fn in self.fn_list:
+            try:
+                print('Loading', fn)
+                fp = os.path.join(self.root_dir, fn)
+                samples = np.load(fp).tolist()
+                self.samples += [(s['image'][i], s['label']) for s in samples for i in range(s['image'].shape[0])]
+            except:
+                print('Load {} failed'.format(fn))
+
+
+    def __len__(self):
+        return len(self.samples)
+        # return len(self.fn_list)
+
+    def __getitem__(self, idx):
+        # self.samples = []
+        # fn = self.fn_list[idx]
+        # print('Loading {}...'.format(fn))
+        # st = time.time()
+        # fp = os.path.join(self.root_dir, fn)
+        # samples = np.load(fp).tolist()
+        # print('Finished loading {}! ({:.4f} secs)'.format(fn, time.time()-st))
+        # # This return a tuple (img, label)
+        # self.samples += [(s['image'][i], s['label']) for s in samples for i in range(s['image'].shape[0])]
+        return self.samples[idx]
+
+class ImageSet(Dataset):
+    def __init__(self, root_dir, fake):
+        self.root_dir = root_dir
+        self.fn_list = list(filter(lambda k: '.npy' in k, os.listdir(self.root_dir)))
+        self.samples = []
+        for fn in self.fn_list:
+            try:
+                print('Loading', fn)
+                fp = os.path.join(self.root_dir, fn)
+                samples = np.load(fp).tolist()
+                if fake:
+                    self.samples += [((s['fake']-np.min(s['fake']))*128/np.max(s['fake']), s['label']) for s in samples]
+                else:
+                    self.samples += [(s['real'], s['label']) for s in samples]
+            except:
+                print('Load {} failed'.format(fn))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        return self.samples[idx]
 
     # def load_wrap(self, fn):
     #     fp = os.path.join(self.root_dir, fn)
@@ -284,7 +378,7 @@ class AudioSet2(Dataset):
         return sample
 
 class AudioSetAudio(Dataset):
-    def __init__(self, root_dir, wrap=True):
+    def __init__(self, root_dir, select_data, wrap=True):
         self.samples = []
         if wrap:
             self.root_dir = os.path.join(root_dir, 'wrap')
@@ -299,11 +393,22 @@ class AudioSetAudio(Dataset):
         if wrap:
             for fn in self.fn_list:
                 fp = os.path.join(self.root_dir, fn)
-                samples = np.load(fp)
-                self.samples += samples.tolist()
+                samples = np.load(fp).tolist()
+                if select_data:
+                    self.samples += [s for s in samples \
+                                 if (((s['label'] in [2, 3, 6]) and np.random.rand() < 0.33) or \
+                                        (s['label'] not in [2, 3, 6]))]
+                else:
+                    self.samples += samples
+            print('Totally {} files selected'.format(len(self.samples)))
+            mm = np.zeros(10)
+            for s in self.samples:
+                mm[s['label']] += 1
+            print('Number of samples in each class')
+            print(mm)
             # pool.map(self.load_wrap, self.fn_list)
             # self.samples = np.concatenate(self.samples).tolist()
-            print(len(self.samples))
+            # print(len(self.samples))
         else:
             manager = mp.Manager()
             q = manager.Queue()
@@ -328,7 +433,7 @@ class AudioSetAudio(Dataset):
     def load_wrap(self, fn):
         fp = os.path.join(self.root_dir, fn)
         samples = np.load(fp)
-        self.samples += samples.tolist()
+        self.samples += samples
         return None
 
 if __name__ == "__main__":

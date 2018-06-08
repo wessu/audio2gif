@@ -61,15 +61,15 @@ if __name__ == "__main__":
     num_gpu = len(cfg.GPU_ID.split(','))
     if args.train_emb:
         print('Train Embedding Net')
-        train_set = AudioSetAudio(cfg.DATA_DIR)
-        eval_set = AudioSetAudio(cfg.EVAL_DATA_DIR)
+        train_set = AudioSetAudio(cfg.DATA_DIR, True)
+        eval_set = AudioSetAudio(cfg.EVAL_DATA_DIR, False)
         trainer = EmbeddingNetTrainer(cfg, output_dir)
         trainer.train(train_set, eval_set)
 
         output_dir = '../output/%s_%s_%s' % \
                      (cfg.DATASET_NAME, cfg.CONFIG_NAME + 'LSTM', timestamp)
-        trainer = EmbeddingNetLSTMTrainer(cfg, output_dir)
-        trainer.train(train_set, eval_set)
+        # trainer = EmbeddingNetLSTMTrainer(cfg, output_dir)
+        # trainer.train(train_set, eval_set)
     elif cfg.TRAIN.FLAG:
         image_transform = transforms.Compose([
             transforms.RandomCrop(cfg.IMSIZE),
@@ -92,7 +92,7 @@ if __name__ == "__main__":
             drop_last=True, shuffle=True, num_workers=int(cfg.WORKERS))
 
         algo = GANTrainer(output_dir)
-        algo.train(dataloader, cfg.STAGE)
+        algo.train(dataloader, cfg.STAGE, cfg.GAN.N_OUTPUT)
     else:
         datapath= '%s/test/val_captions.t7' % (cfg.DATA_DIR)
         algo = GANTrainer(output_dir)

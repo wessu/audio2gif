@@ -53,16 +53,19 @@ class GANTrainer(object):
 
 
     def load_network_embedding(self):
-        from model import EmbeddingNet
-        netE = EmbeddingNet(cfg.AUDIO.FEATURE_DIM, cfg.AUDIO.DIMENSION)
-        netE.apply(weights_init)
-        if cfg.EMB_NET != '':
-            state_dict = torch.load(cfg.EMB_NET,
-                                    map_location=lambda storage, loc: storage)
-            netE.load_state_dict(state_dict)
-            for p in netE.parameters():
-                p.requires_grad=False
-            print('Load from: ', cfg.EMB_NET)
+        # from model import EmbeddingNet
+        # netE = EmbeddingNet(cfg.AUDIO.FEATURE_DIM, cfg.AUDIO.DIMENSION)
+        # netE.apply(weights_init)
+        # if cfg.EMB_NET != '':
+        #     state_dict = torch.load(cfg.EMB_NET,
+        #                             map_location=lambda storage, loc: storage)
+        #     netE.load_state_dict(state_dict)
+        #     removed = list(list(netE.children())[0].children())[:-1]
+        #     netE = nn.Sequential(*removed)
+        print('Load from: ', cfg.EMB_NET)
+        netE = torch.load(cfg.EMB_NET)
+        for p in netE.parameters():
+            p.requires_grad=False
         if cfg.CUDA:
             netE.cuda()
         return netE
@@ -131,7 +134,7 @@ class GANTrainer(object):
             netD.cuda()
         return netG, netD
 
-    def train(self, data_loader, stage=1):
+    def train(self, data_loader, stage=1, n_output=1):
         if stage == 1:
             netG, netD = self.load_network_stageI()
         else:
@@ -147,8 +150,15 @@ class GANTrainer(object):
         batch_size = self.batch_size
         noise = Variable(torch.FloatTensor(batch_size, nz))
         fixed_noise = torch.FloatTensor(batch_size, nz).normal_(0, 1)
-        real_labels = Variable(torch.FloatTensor(batch_size).fill_(1))
-        fake_labels = Variable(torch.FloatTensor(batch_size).fill_(0))
+        if n_output == 1:
+            real_labels = Variable(torch.FloatTensor(batch_size).fill_(1))
+            fake_labels = Variable(torch.FloatTensor(batch_size).fill_(0))
+        elif n_output > 1:
+            real_labels = Variable(torch.FloatTensor(batch_size).fill_(1)) # temporary
+            fake_labels = Variable(torch.FloatTensor(batch_size).fill_(n_output))
+        else:
+            raise Exception('n_output should be an integer larger than 0.')
+
         if cfg.CUDA:
             noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
             real_labels, fake_labels = real_labels.cuda(), fake_labels.cuda()
@@ -158,14 +168,14 @@ class GANTrainer(object):
         lr_decay_step = cfg.TRAIN.LR_DECAY_EPOCH
         optimizerD = \
             optim.Adam(netD.parameters(),
-                       lr=cfg.TRAIN.DISCRIMINATOR_LR, betas=(0.5, 0.999))
+                       lr=cfg.TRAIN.DISCRIMINATOR_LR, betas=(0.9, 0.999))
         netG_para = []
         for p in netG.parameters():
             if p.requires_grad:
                 netG_para.append(p)
         optimizerG = optim.Adam(netG_para,
                                 lr=cfg.TRAIN.GENERATOR_LR,
-                                betas=(0.5, 0.999))
+                                betas=(0.9, 0.999))
         count = 0
         for epoch in range(self.max_epoch):
             start_t = time.time()
@@ -186,21 +196,23 @@ class GANTrainer(object):
                     if cfg.CUDA:
                         audio_feat = data[0].to(device=torch.device('cuda'), dtype=torch.float)
                         real_imgs = data[1].to(device=torch.device('cuda'), dtype=torch.float)
+                        if n_output:
+                            real_labels = data[2].to(device=torch.device('cuda'), dtype=torch.long)
                     else:
                         audio_feat = data[0].type(torch.FloatTensor)
                         real_imgs = data[1].type(torch.FloatTensor)
-                    # embedding = netE(audio_feat)
-                    with torch.no_grad():
-                        m = list(netE._modules.values())[0]
-                        ft = audio_feat
-                        ftlist = []
-                        for j, module in enumerate(m):
-                            nft = module(ft)
-                            ftlist.append(nft)
-                            ft = nft
-                        embedding = ftlist[-2]
-                    #     ee = torch.sum((embedding > 0).to(device=torch.device('cuda'), dtype=torch.float)*embedding)
-                    #     print(ee, torch.sum(embedding))
+                        if n_output:
+                            real_labels = data[2].type(torch.LongTensor)
+                    embedding = netE(audio_feat)
+                    # with torch.no_grad():
+                    #     m = list(netE._modules.values())[0]
+                    #     ft = audio_feat
+                    #     ftlist = []
+                    #     for j, module in enumerate(m):
+                    #         nft = module(ft)
+                    #         ftlist.append(nft)
+                    #         ft = nft
+                    #     embedding = ftlist[-2]
                 else:
                     real_img_cpu, embedding = data
                     real_img_cpu = real_img_cpu.type(torch.FloatTensor)
@@ -215,7 +227,7 @@ class GANTrainer(object):
                 # (2) Generate fake images
                 ######################################################
                 noise.data.normal_(0, 1)
-                inputs = (embedding, fixed_noise)
+                inputs = (embedding, noise)
                 if cfg.CPU:
                     _, fake_imgs, mu, logvar = netG(*inputs)
                 else:
@@ -225,11 +237,16 @@ class GANTrainer(object):
                 ############################
                 # (3) Update D network
                 ###########################
+                if n_output == 1:
+                    loss_func = nn.BCELoss
+                else:
+                    loss_func = nn.CrossEntropyLoss
+                    
                 netD.zero_grad()
                 errD, errD_real, errD_wrong, errD_fake = \
                     compute_discriminator_loss(netD, real_imgs, fake_imgs,
                                                real_labels, fake_labels,
-                                               mu, self.gpus)
+                                               mu, loss_func, self.gpus)
                 errD.backward()
                 optimizerD.step()
                 ############################
@@ -237,15 +254,15 @@ class GANTrainer(object):
                 ###########################
                 netG.zero_grad()
                 errG = compute_generator_loss(netD, fake_imgs,
-                                              real_labels, mu, self.gpus)
+                                              real_labels, mu, loss_func, self.gpus)
                 kl_loss = KL_loss(mu, logvar)
                 errG_total = errG + kl_loss * cfg.TRAIN.COEFF.KL
                 errG_total.backward()
                 optimizerG.step()
 
                 count = count + 1
-                # if i % 50 == 0:
-                if (epoch+1) % 100 == 0:
+                # if (epoch+1) % 100 == 0:
+                if i % 50 == 0:
                     # summary_D = tf.summary.scalar('D_loss', errD.data[0])
                     # summary_D_r = tf.summary.scalar('D_loss_real', errD_real)
                     # summary_D_w = tf.summary.scalar('D_loss_wrong', errD_wrong)
@@ -261,7 +278,7 @@ class GANTrainer(object):
                     # self.summary_writer.add_summary(summary_KL, count)
 
                     # save the image result for each epoch
-                    inputs = (embedding, fixed_noise)
+                    inputs = (embedding, noise)
                     if cfg.CPU:
                         lr_fake, fake, _, _ = netG(*inputs)
                     else:
@@ -367,8 +384,9 @@ class EmbeddingNetTrainer(object):
         from model import EmbeddingNet
         self.embnet = EmbeddingNet(self.feature_dim, self.output_dim)
         self.model = nn.Sequential( self.embnet,
+                                    nn.Linear(self.output_dim, self.output_dim*2),
                                     nn.ReLU(),
-                                    nn.Linear(self.output_dim, self.num_classes),
+                                    nn.Linear(self.output_dim*2, self.num_classes),
                                     )
     def train(self, train_set, eval_set=None):
         dataloader = torch.utils.data.DataLoader(
@@ -448,9 +466,9 @@ class EmbeddingNetTrainer(object):
 class EmbeddingNetLSTMTrainer(EmbeddingNetTrainer):
     def build_model(self):
         from model import EmbeddingNetLSTM
-        self.model = nn.Sequential( EmbeddingNetLSTM(self.feature_dim, self.output_dim),
+        self.model = nn.Sequential( EmbeddingNetLSTM(self.feature_dim, self.output_dim*2),
                                     nn.ReLU(),
-                                    nn.Linear(self.output_dim, self.num_classes),
+                                    nn.Linear(self.output_dim*2, self.num_classes),
                                     )
 
 def print_cm(cm, labels, hide_zeroes=False, hide_diagonal=False, hide_threshold=None):

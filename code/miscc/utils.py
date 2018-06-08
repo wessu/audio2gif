@@ -23,8 +23,8 @@ def KL_loss(mu, logvar):
 
 def compute_discriminator_loss(netD, real_imgs, fake_imgs,
                                real_labels, fake_labels,
-                               conditions, gpus):
-    criterion = nn.BCELoss()
+                               conditions, loss_func, gpus):
+    criterion = loss_func()
     batch_size = real_imgs.size(0)
     cond = conditions.detach()
     fake = fake_imgs.detach()
@@ -82,8 +82,8 @@ def compute_discriminator_loss(netD, real_imgs, fake_imgs,
     return errD, errD_real.data[0], errD_wrong.data[0], errD_fake.data[0]
 
 
-def compute_generator_loss(netD, fake_imgs, real_labels, conditions, gpus):
-    criterion = nn.BCELoss()
+def compute_generator_loss(netD, fake_imgs, real_labels, conditions, loss_func, gpus):
+    criterion = loss_func()
     cond = conditions.detach()
     if cfg.CPU:
         fake_features = netD(fake_imgs)

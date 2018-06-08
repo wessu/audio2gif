@@ -3,8 +3,8 @@ import os, time
 import multiprocessing as mp
 from PIL import Image
 
-# data_dir = '../data/audioset/train/feature/melspec/'
-data_dir = '../data/demo/feature/melspec/'
+data_dir = '../data/audioset/train/feature/melspec/'
+# data_dir = '../data/demo/feature/melspec/'
 save_dir = os.path.join(data_dir, 'wrap_all')
 fl_dir = os.path.join(data_dir, 'wrap_all_fn_list')
 if not os.path.isdir(save_dir):
@@ -84,21 +84,22 @@ def select_image(video):
 #     np.save(save_fp, feat_list)
 #     print('wrap_{} saved'.format(i))
 
-print('Wrap', data_dir, 'into', save_dir)
-fn_list = list(filter(lambda k: '.npz' in k, os.listdir(data_dir)))
-m = int(np.ceil(len(fn_list)/float(n)))
-print('{} / {} = {}'.format(len(fn_list), n, m))
+# print('Wrap', data_dir, 'into', save_dir)
+# fn_list = list(filter(lambda k: '.npz' in k, os.listdir(data_dir)))
+# m = int(np.ceil(len(fn_list)/float(n)))
+# print('{} / {} = {}'.format(len(fn_list), n, m))
 
 
 # manager = mp.Manager()
 # q = manager.Queue()
-# pool = mp.Pool(processes=4)
+# pool = mp.Pool(processes=1)
 # results = pool.map(combine, range(m))
 # q.put('kill')
 # pool.close()
 
-print('Finish!')
+# print('Finish!')
 
+n_samples = np.zeros(10)
 for fn in os.listdir(save_dir):
     print(fn)
     if 'fl' in fn:
@@ -108,17 +109,51 @@ for fn in os.listdir(save_dir):
         w = np.load(os.path.join(save_dir, fn))
         print('load %.4f secs' % (time.time()-st))
         print(len(w))
-        print(w.shape)
-        print(w[0].keys())
-        print(w[1]['image'].shape)
-        print(w[-1]['video'].shape)
-        print(w[-2]['audio'].shape)
-        for _ in range(3):
-            print(w[np.random.randint(0,len(w))]['label'])
+        for s in w:
+            n_samples[s['label']] += 1
+        # print(w.shape)
+        # print(w[0].keys())
+        # print(w[1]['image'].shape)
+        # print(w[-1]['video'].shape)
+        # print(w[-2]['audio'].shape)
+        # for _ in range(3):
+        #     print(w[np.random.randint(0,len(w))]['label'])
 
     except Exception as err:
         print(fn, 'Error:', err)
     print()
+print('Number of samples in training set: ')
+print(n_samples)
+print('')
+print('')
+
+data_dir = '../data/audioset/eval/feature/melspec/'
+save_dir = os.path.join(data_dir, 'wrap_all')
+n_samples = np.zeros(10)
+for fn in os.listdir(save_dir):
+    print(fn)
+    if 'fl' in fn:
+        continue
+    try:
+        st = time.time()
+        w = np.load(os.path.join(save_dir, fn))
+        print('load %.4f secs' % (time.time()-st))
+        print(len(w))
+        for s in w:
+            n_samples[s['label']] += 1
+        # print(w.shape)
+        # print(w[0].keys())
+        # print(w[1]['image'].shape)
+        # print(w[-1]['video'].shape)
+        # print(w[-2]['audio'].shape)
+        # for _ in range(3):
+        #     print(w[np.random.randint(0,len(w))]['label'])
+
+    except Exception as err:
+        print(fn, 'Error:', err)
+    print()
+print('Number of samples in evaluation set: ')
+print(n_samples)
 
 # for i in [2, 4]:
 #     feat_list = []

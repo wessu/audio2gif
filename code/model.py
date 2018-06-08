@@ -116,7 +116,7 @@ class EmbeddingNet(nn.Module):
             nn.MaxPool1d(2), # 25
             ResBlock1d(512, 1024, 1), # 25
             nn.MaxPool1d(2), # 12
-            ResBlock1d(1024, 1024), # 12
+            ResBlock1d(1024, self.out_dim), # 12
             nn.MaxPool1d(6), # 2
             # ResBlock1d(1024, 1024), # 3
             # ResBlock1d(1024, 1024, 3), # 1
@@ -125,7 +125,7 @@ class EmbeddingNet(nn.Module):
             # nn.ReLU(True),
             # nn.MaxPool1d(12),
             Squeeze(), # shape (N, 2048)
-            nn.Linear(1024, self.out_dim)
+            # nn.Linear(1024, self.out_dim)
             )
         # self.lstm = nn.LSTM(1024, 1024)
         # self.embedding_net_2 = nn.Sequential(
@@ -205,8 +205,8 @@ class CA_NET(nn.Module):
     def __init__(self):
         super(CA_NET, self).__init__()
         # self.t_dim = cfg.TEXT.DIMENSION
-        # self.t_dim = cfg.AUDIO.DIMENSION
-        self.t_dim = 1024
+        self.t_dim = cfg.AUDIO.DIMENSION
+        # self.t_dim = 1024
         self.c_dim = cfg.GAN.CONDITION_DIM
         self.fc = nn.Linear(self.t_dim, self.c_dim * 2, bias=True)
         self.relu = nn.ReLU()
@@ -233,10 +233,11 @@ class CA_NET(nn.Module):
 
 
 class D_GET_LOGITS(nn.Module):
-    def __init__(self, ndf, nef, bcondition=True):
+    def __init__(self, ndf, nef, nout, bcondition=True):
         super(D_GET_LOGITS, self).__init__()
         self.df_dim = ndf
         self.ef_dim = nef
+        self.out_dim = nout+1
         self.bcondition = bcondition
         if bcondition:
             self.outlogits = nn.Sequential(
@@ -244,11 +245,13 @@ class D_GET_LOGITS(nn.Module):
                 nn.BatchNorm2d(ndf * 8),
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4),
-                nn.Sigmoid())
+                nn.Sigmoid()
+                )
         else:
             self.outlogits = nn.Sequential(
                 nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=4),
-                nn.Sigmoid())
+                nn.Sigmoid()
+                )
 
     def forward(self, h_code, c_code=None):
         # conditioning output
@@ -315,10 +318,11 @@ class STAGE1_D(nn.Module):
         super(STAGE1_D, self).__init__()
         self.df_dim = cfg.GAN.DF_DIM
         self.ef_dim = cfg.GAN.CONDITION_DIM
+        self.out_dim = cfg.GAN.N_OUTPUT
         self.define_module()
 
     def define_module(self):
-        ndf, nef = self.df_dim, self.ef_dim
+        ndf, nef, nout = self.df_dim, self.ef_dim, self.out_dim
         self.encode_img = nn.Sequential(
             nn.Conv2d(3, ndf, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
@@ -337,7 +341,7 @@ class STAGE1_D(nn.Module):
             nn.LeakyReLU(0.2, inplace=True)
         )
 
-        self.get_cond_logits = D_GET_LOGITS(ndf, nef)
+        self.get_cond_logits = D_GET_LOGITS(ndf, nef, nout)
         self.get_uncond_logits = None
 
     def forward(self, image):
@@ -370,10 +374,11 @@ class STAGE2_D(nn.Module):
         super(STAGE2_D, self).__init__()
         self.df_dim = cfg.GAN.DF_DIM
         self.ef_dim = cfg.GAN.CONDITION_DIM
+        self.out_dim = cfg.GAN.N_OUTPUT
         self.define_module()
 
     def define_module(self):
-        ndf, nef = self.df_dim, self.ef_dim
+        ndf, nef, nout = self.df_dim, self.ef_dim, self.out_dim
         # img size = 4 * 256 * 256
         self.encode_img = nn.Sequential(
             nn.Conv3d(3, ndf, 4, stride=2, padding=1, bias=False),  # 2 * 128 * 128 * ndf
@@ -401,8 +406,8 @@ class STAGE2_D(nn.Module):
             nn.BatchNorm2d(ndf * 8),
             nn.LeakyReLU(0.2, inplace=True)  # 4 * 4 * ndf * 8
         )
-        self.get_cond_logits = D_GET_LOGITS(ndf, nef, bcondition=True)
-        self.get_uncond_logits = D_GET_LOGITS(ndf, nef, bcondition=False)
+        self.get_cond_logits = D_GET_LOGITS(ndf, nef, nout, bcondition=True)
+        self.get_uncond_logits = D_GET_LOGITS(ndf, nef, nout, bcondition=False)
 
     def forward(self, image):
         print("image shape = {}".format(image.shape))
