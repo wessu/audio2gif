@@ -205,7 +205,7 @@ class TextDataset(data.Dataset):
 
 
 class AudioSet(Dataset):
-    def __init__(self, root_dir, frame_hop_size=2, n_frames=5, stage=1):
+    def __init__(self, root_dir, frame_hop_size=2, n_frames=5, stage=1, label=False):
         self.root_dir = root_dir
         self.fn_list = list(filter(lambda k: '.npy' in k, os.listdir(self.root_dir)))
         self.frame_hop_size = frame_hop_size
@@ -219,6 +219,7 @@ class AudioSet(Dataset):
             raise Exception('Stage should be either 1 or 2. Not {}.'.format(self.stage))
 
         self.samples = []
+        self.use_label=label
         for fn in self.fn_list:
             fp = os.path.join(self.root_dir, fn)
             self.samples += np.load(fp).tolist()
@@ -232,7 +233,10 @@ class AudioSet(Dataset):
         # sample = dict(np.load(fp))
         n_samps = self.samples[idx][self.ft_type].shape[0]
         k = np.random.randint(0, n_samps)
-        return (self.samples[idx]['audio'], self.samples[idx][self.ft_type][k])
+        if self.use_label:
+            return (self.samples[idx]['audio'], self.samples[idx][self.ft_type][k], self.samples[idx]['label'])
+        else:
+            return (self.samples[idx]['audio'], self.samples[idx][self.ft_type][k])
 
     # def load_wrap(self, fn):
     #     fp = os.path.join(self.root_dir, fn)

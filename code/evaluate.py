@@ -82,7 +82,7 @@ def inception_score(imgs, inception_model=None, cuda=True, batch_size=32, resize
 if __name__ == '__main__':
 
     dataset = AudioSetImage(data_dir)
-    
+    audio_label_dim = 10
     cuda = True
     if cuda:
         dtype = torch.cuda.FloatTensor
@@ -90,13 +90,17 @@ if __name__ == '__main__':
     else:
         dtype = torch.FloatTensor
     if TRAIN:
-        model = inception_v3(pretrained=True, transform_input=False).type(dtype)
+        full_inception = inception_v3(pretrained=True, transform_input=False).type(dtype)
+        removed = list(full_inception.children())[:-1]
+        model = nn.Sequential(*removed, nn.Linear(2048, audio_label_dim))
         model.train()
+
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=64)
         optimizer = \
             torch.optim.Adam(model.parameters(), lr=1e-5)
         loss_fn = torch.nn.CrossEntropyLoss()
         up = nn.Upsample(size=(299, 299), mode='bilinear').type(dtype)
+
         for epoch in range(MAX_EPOCH):
             for i, data in enumerate(dataloader):
                 img, label = data
@@ -108,13 +112,12 @@ if __name__ == '__main__':
                 img = up(img)
                 optimizer.zero_grad()
                 pred = model(img)
-                print(pred)
                 loss = loss_fn(pred, label)
                 loss.backward()
                 optimizer.step()
             predicted_label = torch.argmax(pred, dim=1)
-            acc = (predicted_label == label)/len(label)
-            print("Epoch {}/{}, loss {}, acc {} ".format(epoch, MAX_EPOCHi, loss, acc))
+            acc = (predicted_label.numpy() == label.numpy())/len(label)
+            print("Epoch {}/{}, loss {}, acc {} ".format(epoch, MAX_EPOCH, loss, acc))
 
         if SAVE_MODEL:
             torch.save(model, MODEL_NAME)

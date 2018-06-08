@@ -54,7 +54,7 @@ if __name__ == "__main__":
         torch.cuda.manual_seed_all(args.manualSeed)
     now = datetime.datetime.now(dateutil.tz.tzlocal())
     timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
-    debugname = 'debug'
+    debugname = 'debu'
     output_dir = '../output/%s_%s_%s' % \
                  (cfg.DATASET_NAME, cfg.CONFIG_NAME, debugname)
 
@@ -95,7 +95,10 @@ if __name__ == "__main__":
         algo = GANTrainer(output_dir)
         algo.train(None, cfg.STAGE)
         #algo.train(dataloader, cfg.STAGE)
-    else:
-        datapath= '%s/test/val_captions.t7' % (cfg.DATA_DIR)
+    else: # sample
+        output_dir = '../output/%s_%s_%s' % \
+                    (cfg.DATASET_NAME, cfg.CONFIG_NAME + 'SAMPLE')
+        datapath= cfg.DATA_DIR
+        model_dir = cfg.NET_G
         algo = GANTrainer(output_dir)
         algo.sample(datapath, cfg.STAGE)
