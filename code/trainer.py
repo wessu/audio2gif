@@ -288,10 +288,12 @@ class GANTrainer(object):
                     if cfg.TRAIN.USE_WGAN:
                         errG = compute_generator_wgan_loss(netD, fake_imgs,
                                                             mu, self.gpus)
-                        errG.backward(mone)
-                        errG = -errG
+                        #errG.backward(mone)
+                        #errG = -errG
                         kl_loss = cfg.TRAIN.COEFF.KL * KL_loss(mu, logvar)
-                        kl_loss.backward()
+                        #kl_loss.backward()
+                        errG_total = -errG + kl_loss
+                        errG_total.backward()
                         for param in netG.parameters():
                             if param.requires_grad:
                                 pass
@@ -315,9 +317,10 @@ class GANTrainer(object):
                         self.summary_writer.add_scalar('D_Loss', errD, count)
                         if count < 5:
                             errG = 0
-                        self.summary_writer.add_scalar('G_loss', errG, count)
+                        self.summary_writer.add_scalar('G_loss', errG_total, count)
                         self.summary_writer.add_scalar('W_Loss', wasserstein_d,count)
                         self.summary_writer.add_scalar('KL_loss', kl_loss.data[0],count)
+                        self.summary_writer.add_scalar('errG', errG, count)
                     else:
                         self.summary_writer.add_scalar('D_loss', errD.data[0],count)
                         self.summary_writer.add_scalar('D_loss_real', errD_real,count)
@@ -343,8 +346,6 @@ class GANTrainer(object):
                 # (1) Prepare training data
                 ######################################################
                 if cfg.DATASET_NAME == 'audioset':
-                    #print(data[0].shape)
-                    #print(data[1].shape)
                     if cfg.CUDA:
                         audio_feat = data[0].to(device=torch.device('cuda'), dtype=torch.float)
                         real_imgs = data[1].to(device=torch.device('cuda'), dtype=torch.float)
@@ -364,6 +365,8 @@ class GANTrainer(object):
                             ftlist.append(nft)
                             ft = nft
                         embedding = ftlist[-2]
+#     ee = torch.sum((embedding > 0).to(device=torch.device('cuda'), dtype=torch.float)*embedding)
+                    #     print(ee, torch.sum(embedding))
                 else:
                     real_img_cpu, embedding = data
                     real_img_cpu = real_img_cpu.type(torch.FloatTensor)
@@ -394,11 +397,9 @@ class GANTrainer(object):
                     errD, wasserstein_d, gp = compute_discriminator_wgan_loss(netD, real_imgs, fake_imgs, self.gpus, mu, cfg.WGAN.LAMBDA)
                     errD.backward()
                     skip_generator_update = (wgan_d_count % cfg.WGAN.N_D != 0)
-                    kl_loss = cfg.TRAIN.COEFF.KL * KL_loss(mu, logvar)
-                    kl_loss.backward()
                     for param in netD.parameters():
                         if param.requires_grad:
-                            #print(param.grad)
+                            #print(param.grad)   
                            pass
                 else:
                     errD, errD_real, errD_wrong, errD_fake = \
@@ -416,12 +417,11 @@ class GANTrainer(object):
                     if cfg.TRAIN.USE_WGAN:
                         errG = compute_generator_wgan_loss(netD, fake_imgs,
                                                             mu, self.gpus)
-                        errG.backward(mone)
-                        errG = -errG
-                        for param in netG.parameters():
-                            if param.requires_grad:
-                                pass
-                #print(param.grad)
+                        #errG = -errG
+                        kl_loss = cfg.TRAIN.COEFF.KL * KL_loss(mu, logvar)
+                        #kl_loss.backward()
+                        errG_total = -errG + kl_loss
+                        errG_total.backward()
                     else:
                         errG = compute_generator_loss(netD, fake_imgs,
                                                       real_labels, mu, self.gpus)
@@ -441,9 +441,10 @@ class GANTrainer(object):
                         self.summary_writer.add_scalar('D_Loss', errD, count)
                         if count < 5:
                             errG = 0
-                        self.summary_writer.add_scalar('G_loss', errG, count)
+                        self.summary_writer.add_scalar('G_loss', errG_total, count)
                         self.summary_writer.add_scalar('KL_loss', kl_loss.data[0],count)
                         self.summary_writer.add_scalar('W_Loss', wasserstein_d,count)
+                        self.summary_writer.add_scalar('errG', errG, count)
                     else:
                         self.summary_writer.add_scalar('D_loss', errD.data[0],count)
                         self.summary_writer.add_scalar('D_loss_real', errD_real,count)
@@ -487,8 +488,10 @@ class GANTrainer(object):
         #
         self.summary_writer.close()
 
+
     def sample(self, datapath, stage=1):
         netG, _ = self.load_network_stageI()
+        netG.eval()
         save_dir = 'sample_G_{}'.format(datapath)
 
         # Load text embeddings generated from the encoder
@@ -497,10 +500,10 @@ class GANTrainer(object):
         val_set = AudioSet(datapath, label=True)
         dataloader = torch.utils.data.DataLoader(
             val_set, batch_size=64,
-            shuffle=True, num_workers=self.n_workers)
+            shuffle=False)
         netE = self.load_network_embedding()
         nz = cfg.Z_DIM
-        noise = torch.FloatTensor(64, nz).normal_(0, 1)
+        noise = torch.FloatTensor(64, nz)
         sampe_result = []
         for i, data in enumerate(dataloader):
             if cfg.DATASET_NAME == 'audioset':
@@ -534,9 +537,6 @@ class GANTrainer(object):
             if cfg.CUDA:
                 real_imgs = real_imgs.cuda()
                 embedding = embedding.cuda()
-                #######################################################
-                # (2) Generate fake images
-                ######################################################
                 noise.data.normal_(0, 1)
                 inputs = (embedding, noise)
                 if cfg.CPU:
@@ -550,7 +550,6 @@ class GANTrainer(object):
         print("sampled {} bathc of data".format(i))
         np.save(np.array(sampe_result), save_dir + ".npz")
         print("saved {}".format(save_dir))
-
 
 class EmbeddingNetTrainer(object):
     def __init__(self, cfg, output_dir=None, model=None):

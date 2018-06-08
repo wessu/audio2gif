@@ -96,8 +96,7 @@ if __name__ == "__main__":
         algo.train(None, cfg.STAGE)
         #algo.train(dataloader, cfg.STAGE)
     else: # sample
-        output_dir = '../output/%s_%s_%s' % \
-                    (cfg.DATASET_NAME, cfg.CONFIG_NAME + 'SAMPLE')
+        output_dir = cfg.CONFIG_NAME + 'SAMPLE'
         datapath= cfg.DATA_DIR
         model_dir = cfg.NET_G
         algo = GANTrainer(output_dir)
