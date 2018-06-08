@@ -1,4 +1,4 @@
-CONFIG_NAME: 'audio_large_lr'
+CONFIG_NAME: 'audio_large_KL'
 
 DATASET_NAME: 'audioset'
 # EMBEDDING_TYPE: 'cnn-rnn'
@@ -12,10 +12,10 @@ IMSIZE: 240 # resize to (not crop)
 WORKERS: 3
 STAGE: 1
 # STAGE1_G: '../output/gif_stageI_2018_05_24_15_46_50/Model/netG_epoch_25.pth'
-EMB_NET: '../output/chosen/audioset_embnet/embnet_3.pth'
+EMB_NET: '/ext3/audioset_embnet/embnet_3.pth'
 TRAIN:
     FLAG: True
-    BATCH_SIZE: 32
+    BATCH_SIZE: 64
     MAX_EPOCH: 1024
     LR_DECAY_EPOCH: 500
     SNAPSHOT_INTERVAL: 100
@@ -25,8 +25,8 @@ TRAIN:
       KL: 2.0
     USE_WGAN: TRUE
     USE_WRONG_DATA: False
-    ADAM_BETA1: 0.5
-    ADAM_BETA2: 0.9
+    ADAM_BETA1: 0.0
+    ADAM_BETA2: 0.999
 
 GAN:
     CONDITION_DIM: 128
@@ -43,4 +43,4 @@ VIDEO:
 
 WGAN:
     LAMBDA: 10
-    N_D: 4
+    N_D: 5
