@@ -28,7 +28,7 @@ __C.VIS_COUNT = 64
 
 __C.Z_DIM = 100
 __C.IMSIZE = 64
-__C.STAGE = 1
+__C.STAGE = 2
 __C.NUM_CLASSES = 10
 
 

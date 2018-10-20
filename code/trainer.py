@@ -32,9 +32,11 @@ class GANTrainer(object):
         if cfg.TRAIN.FLAG:
             self.model_dir = os.path.join(output_dir, 'Model')
             self.image_dir = os.path.join(output_dir, 'Image')
+            self.eval_dir = os.path.join(self.image_dir, 'Eval')
             self.log_dir = os.path.join(output_dir, 'Log')
             mkdir_p(self.model_dir)
             mkdir_p(self.image_dir)
+            mkdir_p(self.eval_dir)
             mkdir_p(self.log_dir)
             self.summary_writer = tf.summary.FileWriter(self.log_dir)
 
@@ -43,6 +45,7 @@ class GANTrainer(object):
         s_gpus = cfg.GPU_ID.split(',')
         self.gpus = [int(ix) for ix in s_gpus]
         self.num_gpus = len(self.gpus)
+        self.n_output = cfg.GAN.N_OUTPUT
         if cfg.CUDA:
             self.batch_size = cfg.TRAIN.BATCH_SIZE * self.num_gpus
             torch.cuda.set_device(self.gpus[0])
@@ -102,7 +105,7 @@ class GANTrainer(object):
         Stage1_G = STAGE1_G()
         netG = STAGE2_G_twostream(Stage1_G)
         netG.apply(weights_init)
-        print(netG)
+        # print(netG)
         if cfg.NET_G != '':
             state_dict = \
                 torch.load(cfg.NET_G,
@@ -127,14 +130,14 @@ class GANTrainer(object):
                            map_location=lambda storage, loc: storage)
             netD.load_state_dict(state_dict)
             print('Load from: ', cfg.NET_D)
-        print(netD)
+        # print(netD)
 
         if cfg.CUDA:
             netG.cuda()
             netD.cuda()
         return netG, netD
 
-    def train(self, data_loader, stage=1, n_output=1):
+    def train(self, data_loader, stage=1, eval_dataset=None):
         if stage == 1:
             netG, netD = self.load_network_stageI()
         else:
@@ -145,23 +148,22 @@ class GANTrainer(object):
             netE = self.load_network_embedding()
             # print('done building')
             # summary(netE, input_size=(128, 430))
+        else:
+            netE = None
 
         nz = cfg.Z_DIM
         batch_size = self.batch_size
-        noise = Variable(torch.FloatTensor(batch_size, nz))
         fixed_noise = torch.FloatTensor(batch_size, nz).normal_(0, 1)
-        if n_output == 1:
-            real_labels = Variable(torch.FloatTensor(batch_size).fill_(1))
+        if self.n_output == 1:
             fake_labels = Variable(torch.FloatTensor(batch_size).fill_(0))
-        elif n_output > 1:
-            real_labels = Variable(torch.FloatTensor(batch_size).fill_(1)) # temporary
-            fake_labels = Variable(torch.FloatTensor(batch_size).fill_(n_output))
+        elif self.n_output > 1:
+            fake_labels = Variable(torch.FloatTensor(batch_size).fill_(self.n_output))
         else:
             raise Exception('n_output should be an integer larger than 0.')
 
         if cfg.CUDA:
-            noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
-            real_labels, fake_labels = real_labels.cuda(), fake_labels.cuda()
+            fixed_noise = fixed_noise.cuda()
+            fake_labels = fake_labels.cuda()
 
         generator_lr = cfg.TRAIN.GENERATOR_LR
         discriminator_lr = cfg.TRAIN.DISCRIMINATOR_LR
@@ -189,55 +191,13 @@ class GANTrainer(object):
                     param_group['lr'] = discriminator_lr
 
             for i, data in enumerate(data_loader, 0):
-                ######################################################
-                # (1) Prepare training data
-                ######################################################
-                if cfg.DATASET_NAME == 'audioset':
-                    if cfg.CUDA:
-                        audio_feat = data[0].to(device=torch.device('cuda'), dtype=torch.float)
-                        real_imgs = data[1].to(device=torch.device('cuda'), dtype=torch.float)
-                        if n_output:
-                            real_labels = data[2].to(device=torch.device('cuda'), dtype=torch.long)
-                    else:
-                        audio_feat = data[0].type(torch.FloatTensor)
-                        real_imgs = data[1].type(torch.FloatTensor)
-                        if n_output:
-                            real_labels = data[2].type(torch.LongTensor)
-                    embedding = netE(audio_feat)
-                    # with torch.no_grad():
-                    #     m = list(netE._modules.values())[0]
-                    #     ft = audio_feat
-                    #     ftlist = []
-                    #     for j, module in enumerate(m):
-                    #         nft = module(ft)
-                    #         ftlist.append(nft)
-                    #         ft = nft
-                    #     embedding = ftlist[-2]
-                else:
-                    real_img_cpu, embedding = data
-                    real_img_cpu = real_img_cpu.type(torch.FloatTensor)
-                    real_imgs = Variable(real_img_cpu)
-                    embedding = embedding.type(torch.FloatTensor)
-                    embedding = Variable(embedding)
-                if cfg.CUDA:
-                    real_imgs = real_imgs.cuda()
-                    embedding = embedding.cuda()
-
-                #######################################################
-                # (2) Generate fake images
-                ######################################################
-                noise.data.normal_(0, 1)
-                inputs = (embedding, noise)
-                if cfg.CPU:
-                    _, fake_imgs, mu, logvar = netG(*inputs)
-                else:
-                    _, fake_imgs, mu, logvar = \
-                        nn.parallel.data_parallel(netG, inputs, self.gpus)
+                embedding, real_labels, real_imgs = self.get_embedding(data, netE)
+                lr_fake, fake_imgs, mu, logvar = self.gen_image(embedding, netG)
 
                 ############################
                 # (3) Update D network
                 ###########################
-                if n_output == 1:
+                if self.n_output == 1:
                     loss_func = nn.BCELoss
                 else:
                     loss_func = nn.CrossEntropyLoss
@@ -278,13 +238,7 @@ class GANTrainer(object):
                     # self.summary_writer.add_summary(summary_KL, count)
 
                     # save the image result for each epoch
-                    inputs = (embedding, noise)
-                    if cfg.CPU:
-                        lr_fake, fake, _, _ = netG(*inputs)
-                    else:
-                        lr_fake, fake, _, _ = \
-                            nn.parallel.data_parallel(netG, inputs, self.gpus)
-                    save_img_results(real_imgs, fake, epoch, self.image_dir)
+                    save_img_results(real_imgs, fake_imgs, epoch, self.image_dir)
                     if lr_fake is not None:
                         save_img_results(None, lr_fake, epoch, self.image_dir)
             end_t = time.time()
@@ -295,12 +249,90 @@ class GANTrainer(object):
                   % (epoch+1, self.max_epoch, i, len(data_loader),
                      errD.data[0], errG.data[0], kl_loss.data[0],
                      errD_real, errD_wrong, errD_fake, (end_t - start_t)))
+
+            if eval_dataset is not None:
+                self.evaluate(netG, netE, eval_dataset, epoch, stage=stage, random=False)
+                self.evaluate(netG, netE, eval_dataset, epoch, stage=stage, random=True)
+
             if epoch % self.snapshot_interval == 0:
                 save_model(netG, netD, epoch, self.model_dir)
         #
         save_model(netG, netD, self.max_epoch, self.model_dir)
         #
         self.summary_writer.close()
+
+    def evaluate(self, netG, netE, dataset, epoch, stage=1, random=False):
+        dataloader = torch.utils.data.DataLoader(
+            dataset, batch_size=cfg.TRAIN.BATCH_SIZE,
+            shuffle=random, num_workers=1)
+
+        ev = 2 if random else 1
+        for i, data in enumerate(dataloader, 0):
+            embedding, real_labels, real_imgs = self.get_embedding(data, netE)
+            lr_fake, fake_imgs, mu, logvar = self.gen_image(embedding, netG)
+            save_img_results(real_imgs, fake_imgs, epoch, self.eval_dir, ev)
+            break
+        return
+
+    def get_embedding(self, data, netE=None):
+        ######################################################
+        # (1) Prepare training data
+        ######################################################
+        if cfg.DATASET_NAME == 'audioset':
+            if cfg.CUDA:
+                audio_feat = data[0].to(device=torch.device('cuda'), dtype=torch.float)
+                real_imgs = data[1].to(device=torch.device('cuda'), dtype=torch.float)
+                if self.n_output > 1:
+                    real_labels = data[2].to(device=torch.device('cuda'), dtype=torch.float)
+                else:
+                    real_labels = Variable(torch.FloatTensor(self.batch_size).fill_(1)).cuda()
+            else:
+                audio_feat = data[0].type(torch.FloatTensor)
+                real_imgs = data[1].type(torch.FloatTensor)
+                if self.n_output > 1:
+                    real_labels = data[2].type(torch.FloatTensor)
+                else:
+                    real_labels = Variable(torch.FloatTensor(self.batch_size).fill_(1))
+            embedding = netE(audio_feat)
+            # with torch.no_grad():
+            #     m = list(netE._modules.values())[0]
+            #     ft = audio_feat
+            #     ftlist = []
+            #     for j, module in enumerate(m):
+            #         nft = module(ft)
+            #         ftlist.append(nft)
+            #         ft = nft
+            #     embedding = ftlist[-2]
+        else:
+            real_img_cpu, embedding = data
+            real_img_cpu = real_img_cpu.type(torch.FloatTensor)
+            real_imgs = Variable(real_img_cpu)
+            embedding = embedding.type(torch.FloatTensor)
+            embedding = Variable(embedding)
+        if cfg.CUDA:
+            real_imgs = real_imgs.cuda()
+            embedding = embedding.cuda()
+
+        return embedding, real_labels, real_imgs
+
+    def gen_image(self, embedding, netG):
+        #######################################################
+        # (2) Generate fake images
+        ######################################################
+        noise = Variable(torch.FloatTensor(self.batch_size, cfg.Z_DIM))
+        noise.data.normal_(0, 1)
+        if cfg.CUDA:
+            noise = noise.cuda()
+        inputs = (embedding, noise)
+        if cfg.CPU:
+            lr_fake, fake_imgs, mu, logvar = netG(*inputs)
+        else:
+            lr_fake, fake_imgs, mu, logvar = \
+                nn.parallel.data_parallel(netG, inputs, self.gpus)
+
+        return lr_fake, fake_imgs, mu, logvar
+
+
 
     def sample(self, datapath, stage=1):
         #if stage == 1:
@@ -310,13 +342,20 @@ class GANTrainer(object):
         #netG.eval()
 
         # Load text embeddings generated from the encoder
-        t_file = torchfile.load(datapath)
-        captions_list = t_file.raw_txt
-        embeddings = np.concatenate(t_file.fea_txt, axis=0)
-        num_embeddings = len(captions_list)
-        print('Successfully load sentences from: ', datapath)
-        print('Total number of sentences:', num_embeddings)
-        print('num_embeddings:', num_embeddings, embeddings.shape)
+        if cfg.DATASET_NAME == 'coco':
+            t_file = torchfile.load(datapath)
+            captions_list = t_file.raw_txt
+            embeddings = np.concatenate(t_file.fea_txt, axis=0)
+            num_embeddings = len(captions_list)
+            print('Successfully load sentences from: ', datapath)
+            print('Total number of sentences:', num_embeddings)
+            print('num_embeddings:', num_embeddings, embeddings.shape)
+
+        # Load Audio files
+        elif cfg.DATASET_NAME == 'audioset':
+            netE = self.load_network_embedding()
+
+
         # path to save generated samples
         save_dir = cfg.NET_G[:cfg.NET_G.find('.pth')]
         mkdir_p(save_dir)

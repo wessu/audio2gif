@@ -11,6 +11,7 @@ import torch.nn as nn
 import torchvision.utils as vutils
 from PIL import Image
 from array2gif import write_gif
+import imageio
 
 
 #############################
@@ -123,18 +124,29 @@ def weights_init(m):
 
 
 #############################
-def save_img_results(data_img, fake, epoch, image_dir):
+def save_img_results(data_img, fake, epoch, image_dir, evalu=0):
     num = cfg.VIS_COUNT
     fake = fake[0:num]
     # data_img is changed to [0,1]
     if data_img is not None:
         data_img = data_img[0:num]
-        if len(data_img[0].shape) > 3:
+        if evalu > 0:
+            vutils.save_image(
+                data_img, '%s/%04d_%d_samples_real.png' % 
+                (image_dir, epoch, evalu), normalize=True)
+            # fake.data is still [-1, 1]
+            vutils.save_image(
+                fake.data, '%s/%04d_%d_samples_fake.png' %
+                (image_dir, epoch, evalu), normalize=True)
+        elif len(data_img[0].shape) > 3:
             # save gifs
-            for i, img in enumerate(data_img):
-                save_gif('%s/real_samples_%d.gif' % (image_dir, i), img.numpy())
-            for i, img in enumerate(fake.data):
-                save_gif('%s/fake_samples_%d_epoch_%03d.gif' % (image_dir, i, epoch), img.numpy())
+            # [N, C, T, H, W]
+            save_gif('%s/%04d_real_samples.gif' % (image_dir, epoch), data_img)
+            save_gif('%s/%04d_fake_samples.gif' % (image_dir, epoch), fake.data)
+            # for i, img in enumerate(data_img):
+            #     save_gif('%s/real_samples_%d.gif' % (image_dir, i), img.cpu().numpy())
+            # for i, img in enumerate(fake.data):
+            #     save_gif('%s/fake_samples_%d_epoch_%03d.gif' % (image_dir, i, epoch), img.cpu().numpy())
         else:
             vutils.save_image(
                 data_img, '%s/real_samples.png' % image_dir,
@@ -150,11 +162,14 @@ def save_img_results(data_img, fake, epoch, image_dir):
 
 def save_gif(name, frames):
     # given frames with dim [C, T, H, W] and svae as a gif
-    frames = np.transpose(frames, (1,0, 2, 3))
-    processed = []
-    for f in frames:
-        processed.append(f)
-    write_gif(processed, name, fps=5)
+    print('save to', name)
+    frames = torch.transpose(frames, 2, 0)
+    frames = torch.transpose(frames, 2, 1)
+    images = [np.moveaxis(vutils.make_grid(f, nrow=4).cpu().numpy(), 0, -1) for f in frames]
+    imageio.mimsave(name, images)
+    # print(frames.shape)
+    # processed = [f for f in frames]
+    # write_gif(processed, name, fps=5)
 
 def save_model(netG, netD, epoch, model_dir):
     torch.save(

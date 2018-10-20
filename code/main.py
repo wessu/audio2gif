@@ -76,10 +76,13 @@ if __name__ == "__main__":
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        eval_dataset = None
         if cfg.DATASET_NAME == 'gif':
             dataset = GIFDataset(cfg.DATA_DIR, cfg.TEXT.DIMENSION, imsize=cfg.IMSIZE, stage=cfg.STAGE)
         elif cfg.DATASET_NAME == 'audioset':
             dataset = AudioSet(cfg.DATA_DIR, frame_hop_size=cfg.VIDEO.HOP_SIZE,
+                               n_frames=cfg.VIDEO.N_FRAMES, stage=cfg.STAGE)
+            eval_dataset = AudioSet(cfg.EVAL_DATA_DIR, frame_hop_size=cfg.VIDEO.HOP_SIZE,
                                n_frames=cfg.VIDEO.N_FRAMES, stage=cfg.STAGE)
         else:
             dataset = TextDataset(cfg.DATA_DIR, 'train',
@@ -92,7 +95,7 @@ if __name__ == "__main__":
             drop_last=True, shuffle=True, num_workers=int(cfg.WORKERS))
 
         algo = GANTrainer(output_dir)
-        algo.train(dataloader, cfg.STAGE, cfg.GAN.N_OUTPUT)
+        algo.train(dataloader, cfg.STAGE, eval_dataset)
     else:
         datapath= '%s/test/val_captions.t7' % (cfg.DATA_DIR)
         algo = GANTrainer(output_dir)

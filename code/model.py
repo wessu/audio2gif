@@ -237,7 +237,7 @@ class D_GET_LOGITS(nn.Module):
         super(D_GET_LOGITS, self).__init__()
         self.df_dim = ndf
         self.ef_dim = nef
-        self.out_dim = nout+1
+        self.out_dim = nout+1 if nout > 1 else 1
         self.bcondition = bcondition
         if bcondition:
             self.outlogits = nn.Sequential(
@@ -410,9 +410,9 @@ class STAGE2_D(nn.Module):
         self.get_uncond_logits = D_GET_LOGITS(ndf, nef, nout, bcondition=False)
 
     def forward(self, image):
-        print("image shape = {}".format(image.shape))
+        # print("image shape = {}".format(image.shape))
         img_embedding = self.encode_img(image)
-        print("img_embedding shape = {}".format(img_embedding.shape))
+        # print("img_embedding shape = {}".format(img_embedding.shape))
         return img_embedding
 
 class STAGE2_G_twostream(nn.Module):
@@ -505,22 +505,22 @@ class STAGE2_G_twostream(nn.Module):
         h_code_2d = self.upsample4(h_code_2d)
 
         background = self.background(h_code_2d)
-        print("h_code shape = {}".format(h_code.shape))
-        print("h_code_2d shape = {}".format(h_code_2d.shape))
+        # print("h_code shape = {}".format(h_code.shape))
+        # print("h_code_2d shape = {}".format(h_code_2d.shape))
         h_code_3d = torch.unsqueeze(h_code, 2)
-        print("unsqueezed shape = {}".format(h_code_3d.shape))
+        # print("unsqueezed shape = {}".format(h_code_3d.shape))
         h_code_3d = self.upsample1_3d(h_code_3d)
         h_code_3d = self.upsample2_3d(h_code_3d)
         h_code_3d = self.upsample3_3d(h_code_3d)
         h_code_3d = self.upsample4_3d(h_code_3d)
 
         foreground = self.foreground(h_code_3d)
-        print("foreground shape = {}".format(foreground.shape))
+        # print("foreground shape = {}".format(foreground.shape))
         mask = self.foreground_mask(h_code_3d)
         expanded_background = torch.unsqueeze(background, 2)
         foreground_D = mask.shape[2]
         expanded_background = expanded_background.repeat(1,1,foreground_D, 1,1)
-        print("expanded background shape = {}".format(expanded_background.shape))
+        # print("expanded background shape = {}".format(expanded_background.shape))
         fake_img = mask * expanded_background + (1-mask) * foreground
 
         return stage1_img, fake_img, mu, logvar

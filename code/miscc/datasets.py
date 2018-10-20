@@ -212,7 +212,7 @@ class TextDataset(data.Dataset):
 class AudioSet(Dataset):
     def __init__(self, root_dir, frame_hop_size=2, n_frames=5, stage=1):
         self.root_dir = root_dir
-        self.fn_list = list(filter(lambda k: '.npy' in k, os.listdir(self.root_dir)))[:25]
+        self.fn_list = list(filter(lambda k: '.npy' in k, os.listdir(self.root_dir)))
         # self.fn_list = ['wrap_4.npy', 'wrap_7.npy', 'wrap_8.npy', 'wrap_51.npy', 
                         # 'wrap_15.npy', 'wrap_16.npy', 'wrap_19.npy', 'wrap_32.npy']
         self.frame_hop_size = frame_hop_size
@@ -227,11 +227,13 @@ class AudioSet(Dataset):
 
         self.samples = []
         n_samples = np.zeros(10)
-        for fn in self.fn_list:
+        for fn in self.fn_list[:8]:
             try:
                 print('Loading', fn)
                 fp = os.path.join(self.root_dir, fn)
-                samples = [{self.ft_type: s[self.ft_type], 'audio': s['audio'], 'label': s['label']} for s in np.load(fp).tolist()]
+                samples = [{self.ft_type: np.swapaxes(s[self.ft_type], 1, 2) if self.ft_type == 'video' else s[self.ft_type], 
+                            'audio': s['audio'], 
+                            'label': s['label']} for s in np.load(fp).tolist()]
                 for s in samples:
                     n_samples[s['label']] += 1
                 self.samples += samples
