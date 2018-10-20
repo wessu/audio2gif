@@ -225,34 +225,34 @@ class AudioSet(Dataset):
         else:
             raise Exception('Stage should be either 1 or 2. Not {}.'.format(self.stage))
 
-        self.samples = []
-        n_samples = np.zeros(10)
-        for fn in self.fn_list[:8]:
-            try:
-                print('Loading', fn)
-                fp = os.path.join(self.root_dir, fn)
-                samples = [{self.ft_type: np.swapaxes(s[self.ft_type], 1, 2) if self.ft_type == 'video' else s[self.ft_type], 
-                            'audio': s['audio'], 
-                            'label': s['label']} for s in np.load(fp).tolist()]
-                for s in samples:
-                    n_samples[s['label']] += 1
-                self.samples += samples
-            except:
-                print('Load {} failed'.format(fn))
-        print('Number of samples in the dataset: ')
-        print(n_samples)
-        np.savetxt('../data/n_training_samples', n_samples)
-
+        # self.samples = []
+        # n_samples = np.zeros(10)
+        # for fn in self.fn_list[:8]:
+        #     try:
+        #         print('Loading', fn)
+        #         fp = os.path.join(self.root_dir, fn)
+        #         samples = [{self.ft_type: np.swapaxes(s[self.ft_type], 1, 2) if self.ft_type == 'video' else s[self.ft_type], 
+        #                     'audio': s['audio'], 
+        #                     'label': s['label']} for s in np.load(fp).tolist()]
+        #         for s in samples:
+        #             n_samples[s['label']] += 1
+        #         self.samples += samples
+        #     except:
+        #         print('Load {} failed'.format(fn))
+        print('Number of samples in the dataset: {}'.format(len(self.fn_list)))
+        np.savetxt('../data/n_training_samples', len(self.fn_list))
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.fn_list)
 
     def __getitem__(self, idx):
-        # fp = os.path.join(self.root_dir, self.fn_list[idx])
-        # sample = dict(np.load(fp))
-        n_samps = self.samples[idx][self.ft_type].shape[0]
-        k = np.random.randint(0, n_samps)
-        return (self.samples[idx]['audio'], self.samples[idx][self.ft_type][k], self.samples[idx]['label'])
+        try:
+            fp = os.path.join(self.root_dir, self.fn_list[idx])
+            sample = np.load(fp)
+        except:
+            print("Fail to load data from {}".format(self.fn_list[idx]))
+            exit(1)
+        return (self.sample['audio'], self.sample[self.ft_type][k], self.sample['label'])
 
 def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
     inputs = torch.cat(inputs)
